@@ -1,0 +1,478 @@
+<title>Pickpocketing RNG — Ratwood</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root {
+    color-scheme: light;
+    --plane:      #f4f1e9;
+    --surface:    #fcfbf7;
+    --ink:        #17150f;
+    --ink-2:      #57534a;
+    --muted:      #8a857a;
+    --grid:       #e4e0d4;
+    --axis:       #cbc6b7;
+    --border:     rgba(23,21,15,0.12);
+    --accent:     #a8791f;   /* brass — chrome only, never a data hue */
+    --accent-ink: #7a5710;
+    /* sequential (success prob): low → high */
+    --seq-0:#eef4fd; --seq-1:#cde2fb; --seq-2:#9ec5f4; --seq-3:#6da7ec; --seq-4:#3987e5; --seq-5:#256abf; --seq-6:#184f95; --seq-7:#0d366b;
+    --cell-ink-lo:#17150f; --cell-ink-hi:#ffffff;
+    /* ordered outcome tiers: caught → flawless */
+    --t0:#a01b13; --t1:#d3803f; --t2:#a7d3b8; --t3:#5fb187; --t4:#2f8a5f; --t5:#125a39;
+    --t0-ink:#fff; --t1-ink:#fff; --t2-ink:#17150f; --t3-ink:#fff; --t4-ink:#fff; --t5-ink:#fff;
+    /* categorical (extraction lines) */
+    --s1:#2a78d6; --s2:#eb6834; --s3:#1baf7a; --s4:#eda100;
+    --good:#006300; --bad:#c0322a;
+    --mono: ui-monospace, "SFMono-Regular", "Cascadia Mono", Menlo, Consolas, monospace;
+    --ui: system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:where(:not([data-theme="light"])) {
+      color-scheme: dark;
+      --plane:#0d0d0b; --surface:#191813; --ink:#f6f3ea; --ink-2:#c3beb0; --muted:#8f8a7d;
+      --grid:#2b2a25; --axis:#3a382f; --border:rgba(246,243,234,0.12);
+      --accent:#d8b25c; --accent-ink:#e6c983;
+      --seq-0:#1b2330; --seq-1:#223148; --seq-2:#2a4d78; --seq-3:#2f6bb0; --seq-4:#3987e5; --seq-5:#6da7ec; --seq-6:#a9ccf5; --seq-7:#cde2fb;
+      --cell-ink-lo:#f6f3ea; --cell-ink-hi:#0d0d0b;
+      --t0:#e2564b; --t1:#e0a35a; --t2:#84c39d; --t3:#54ac7e; --t4:#3f9e6b; --t5:#2f8a5f;
+      --t0-ink:#0d0d0b; --t1-ink:#0d0d0b; --t2-ink:#0d0d0b; --t3-ink:#0d0d0b; --t4-ink:#fff; --t5-ink:#fff;
+      --s1:#3987e5; --s2:#d95926; --s3:#199e70; --s4:#c98500;
+      --good:#0ca30c; --bad:#e66767;
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --plane:#0d0d0b; --surface:#191813; --ink:#f6f3ea; --ink-2:#c3beb0; --muted:#8f8a7d;
+    --grid:#2b2a25; --axis:#3a382f; --border:rgba(246,243,234,0.12);
+    --accent:#d8b25c; --accent-ink:#e6c983;
+    --seq-0:#1b2330; --seq-1:#223148; --seq-2:#2a4d78; --seq-3:#2f6bb0; --seq-4:#3987e5; --seq-5:#6da7ec; --seq-6:#a9ccf5; --seq-7:#cde2fb;
+    --cell-ink-lo:#f6f3ea; --cell-ink-hi:#0d0d0b;
+    --t0:#e2564b; --t1:#e0a35a; --t2:#84c39d; --t3:#54ac7e; --t4:#3f9e6b; --t5:#2f8a5f;
+    --t0-ink:#0d0d0b; --t1-ink:#0d0d0b; --t2-ink:#0d0d0b; --t3-ink:#0d0d0b; --t4-ink:#fff; --t5-ink:#fff;
+    --s1:#3987e5; --s2:#d95926; --s3:#199e70; --s4:#c98500;
+    --good:#0ca30c; --bad:#e66767;
+  }
+
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--plane); color:var(--ink); font-family:var(--ui); line-height:1.5; -webkit-font-smoothing:antialiased; }
+  .wrap { max-width:1080px; margin:0 auto; padding:clamp(20px,4vw,52px) clamp(16px,4vw,32px) 72px; }
+
+  header.hero { display:flex; flex-direction:column; gap:14px; margin-bottom:34px; }
+  .eyebrow { font-size:12px; letter-spacing:.22em; text-transform:uppercase; color:var(--accent-ink); font-weight:700; }
+  h1 { font-size:clamp(28px,5vw,44px); line-height:1.05; margin:0; text-wrap:balance; letter-spacing:-0.02em; font-weight:800; }
+  .lede { font-size:clamp(15px,2vw,18px); color:var(--ink-2); max-width:60ch; margin:0; }
+  .formula { font-family:var(--mono); font-size:14px; color:var(--ink); background:var(--surface); border:1px solid var(--border);
+             border-left:3px solid var(--accent); border-radius:8px; padding:14px 16px; margin-top:4px; overflow-x:auto; }
+  .formula b { color:var(--accent-ink); font-weight:700; }
+  .formula .muted { color:var(--muted); }
+
+  section { margin-top:40px; }
+  .sec-head { display:flex; align-items:baseline; gap:12px; margin-bottom:6px; flex-wrap:wrap; }
+  .sec-num { font-family:var(--mono); font-size:12px; color:var(--accent-ink); font-weight:700; }
+  h2 { font-size:20px; margin:0; letter-spacing:-0.01em; font-weight:750; }
+  .sec-sub { color:var(--ink-2); font-size:14px; margin:2px 0 18px; max-width:66ch; }
+
+  .panel { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:clamp(14px,2.4vw,22px); }
+
+  /* controls */
+  .controls { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:18px 26px; align-items:start; }
+  .ctl { display:flex; flex-direction:column; gap:8px; }
+  .ctl > label { font-size:12px; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); font-weight:700; }
+  .seg { display:inline-flex; background:var(--plane); border:1px solid var(--border); border-radius:9px; padding:3px; gap:2px; }
+  .seg button { flex:1; font-family:var(--ui); font-size:13px; font-weight:600; color:var(--ink-2); background:transparent; border:0; padding:7px 10px; border-radius:6px; cursor:pointer; }
+  .seg button[aria-pressed="true"] { background:var(--surface); color:var(--ink); box-shadow:0 1px 2px rgba(0,0,0,.12); }
+  .seg button:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+  .slider { display:flex; align-items:center; gap:12px; }
+  .slider input[type=range] { flex:1; accent-color:var(--accent); }
+  .slider .val { font-family:var(--mono); font-size:14px; font-weight:700; min-width:2.4ch; text-align:right; font-variant-numeric:tabular-nums; }
+  .slider .sub { font-family:var(--mono); font-size:11px; color:var(--muted); }
+
+  figure { margin:0; }
+  figcaption { font-size:13px; color:var(--ink-2); margin-top:12px; }
+  figcaption b { color:var(--ink); font-weight:700; }
+
+  .legend { display:flex; flex-wrap:wrap; gap:10px 16px; margin-top:14px; }
+  .legend .item { display:inline-flex; align-items:center; gap:7px; font-size:12.5px; color:var(--ink-2); }
+  .legend .sw { width:13px; height:13px; border-radius:3px; flex:none; box-shadow:inset 0 0 0 1px var(--border); }
+  .legend .ln { width:16px; height:0; border-top:2px solid; flex:none; }
+
+  /* heatmap */
+  .heat-scroll { overflow-x:auto; }
+  table.heat { border-collapse:separate; border-spacing:2px; margin:0 auto; }
+  table.heat th { font-size:11.5px; color:var(--muted); font-weight:600; padding:3px; font-variant-numeric:tabular-nums; }
+  table.heat th.rowh { text-align:right; padding-right:8px; white-space:nowrap; color:var(--ink-2); font-weight:600; }
+  table.heat th.corner { text-align:right; padding-right:8px; color:var(--muted); font-weight:700; font-size:11px; }
+  table.heat td { width:46px; height:38px; text-align:center; border-radius:5px; font-family:var(--mono); font-size:12.5px; font-weight:600;
+                  font-variant-numeric:tabular-nums; cursor:default; position:relative; }
+  table.heat td.col-hi { box-shadow:0 0 0 2px var(--accent); }
+  .axis-cap { text-align:center; font-size:11.5px; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); font-weight:700; margin:10px 0 2px; }
+  .rowcap { writing-mode:vertical-rl; transform:rotate(180deg); }
+  .seq-legend { display:flex; align-items:center; gap:0; margin-top:16px; }
+  .seq-legend .bar { display:flex; height:12px; border-radius:3px; overflow:hidden; flex:none; box-shadow:inset 0 0 0 1px var(--border); }
+  .seq-legend .bar span { width:26px; height:100%; }
+  .seq-legend .lab { font-size:11.5px; color:var(--muted); font-family:var(--mono); padding:0 8px; }
+
+  /* stacked tiers */
+  .stack-rows { display:flex; flex-direction:column; gap:10px; }
+  .stack-row { display:grid; grid-template-columns:74px 1fr; align-items:center; gap:12px; }
+  .stack-row .lbl { font-size:12.5px; color:var(--ink-2); text-align:right; }
+  .stack-row .lbl b { display:block; color:var(--ink); font-weight:700; font-size:13px; }
+  .bar-track { display:flex; height:26px; border-radius:6px; overflow:hidden; background:var(--plane); box-shadow:inset 0 0 0 1px var(--border); }
+  .bar-track .seg { height:100%; display:flex; align-items:center; justify-content:center; font-family:var(--mono); font-size:11px; font-weight:700; color:#fff; white-space:nowrap; overflow:hidden; }
+
+  /* line chart */
+  .line-wrap { overflow-x:auto; }
+  svg { display:block; max-width:100%; }
+  svg text { font-family:var(--ui); }
+
+  /* tooltip */
+  .tip { position:fixed; z-index:50; pointer-events:none; background:var(--surface); color:var(--ink); border:1px solid var(--border);
+         border-radius:8px; padding:9px 11px; font-size:12.5px; box-shadow:0 8px 26px rgba(0,0,0,.18); opacity:0; transition:opacity .1s; max-width:240px; }
+  .tip .th { font-weight:700; margin-bottom:5px; font-size:12.5px; }
+  .tip .rw { display:flex; justify-content:space-between; gap:16px; font-variant-numeric:tabular-nums; }
+  .tip .rw .k { color:var(--ink-2); display:flex; align-items:center; gap:6px; }
+  .tip .rw .sw { width:9px; height:9px; border-radius:2px; }
+  .tip .rw .v { font-family:var(--mono); font-weight:600; }
+
+  .notes { display:grid; grid-template-columns:repeat(auto-fit,minmax(230px,1fr)); gap:16px; }
+  .note { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:16px 18px; }
+  .note h3 { margin:0 0 6px; font-size:14px; font-weight:700; }
+  .note p { margin:0; font-size:13px; color:var(--ink-2); }
+  .note .mono { font-family:var(--mono); color:var(--ink); font-size:12.5px; }
+
+  details.tbl { margin-top:20px; border:1px solid var(--border); border-radius:10px; background:var(--surface); }
+  details.tbl summary { cursor:pointer; padding:13px 18px; font-size:13px; font-weight:700; color:var(--ink-2); list-style:none; }
+  details.tbl summary::-webkit-details-marker { display:none; }
+  details.tbl summary::before { content:"▸ "; color:var(--accent-ink); }
+  details.tbl[open] summary::before { content:"▾ "; }
+  .tbl-scroll { overflow-x:auto; padding:0 18px 18px; }
+  table.data { border-collapse:collapse; width:100%; font-size:12.5px; }
+  table.data th, table.data td { text-align:right; padding:6px 10px; border-bottom:1px solid var(--grid); font-variant-numeric:tabular-nums; font-family:var(--mono); }
+  table.data th:first-child, table.data td:first-child { text-align:left; }
+  table.data thead th { color:var(--muted); font-weight:700; border-bottom:1px solid var(--axis); }
+
+  footer { margin-top:48px; padding-top:18px; border-top:1px solid var(--border); color:var(--muted); font-size:12px; }
+  footer code { font-family:var(--mono); color:var(--ink-2); }
+  @media (prefers-reduced-motion: reduce){ *{transition:none!important;} }
+</style>
+
+<div class="wrap">
+  <header class="hero">
+    <div class="eyebrow">Ratwood · Thief's Field Manual</div>
+    <h1>How the pickpocket dice fall</h1>
+    <p class="lede">Every lift resolves in two independent rolls: a <b>contested detection check</b> that decides how cleanly it goes, and — for bags — a <b>per-item grab check</b>. Both are driven entirely by the thief's Pickpocketing skill and the mark's stats. Move the dials to see the odds recompute.</p>
+    <div class="formula">
+      thief = <b>roll((skill+1)d6)</b> + ⌊(thiefSPD−10)/3⌋ &nbsp;<span class="muted">vs</span>&nbsp; mark = PER<span class="muted">·awareness</span> + ⌊(markSPD−10)/3⌋<br>
+      <b>margin</b> = thief − mark &nbsp;<span class="muted">→ &lt;−6 caught · &lt;0 failed · &lt;5 heard · &lt;10 felt · &lt;17 shake · ≥17 flawless</span>
+    </div>
+  </header>
+
+  <section aria-label="Controls">
+    <div class="panel controls">
+      <div class="ctl">
+        <label id="lbl-aware">Mark's awareness</label>
+        <div class="seg" role="group" aria-labelledby="lbl-aware" id="seg-aware">
+          <button data-v="behind" aria-pressed="true">Behind</button>
+          <button data-v="facing" aria-pressed="false">Facing</button>
+          <button data-v="unaware" aria-pressed="false">Unaware</button>
+        </div>
+        <div class="slider"><span class="sub" id="aware-note">Stolen from behind — normal perception.</span></div>
+      </div>
+      <div class="ctl">
+        <label for="per">Mark Perception</label>
+        <div class="slider"><input type="range" id="per" min="1" max="20" value="10"><span class="val" id="per-v">10</span></div>
+        <span class="sub">Highlighted column in the heatmap · drives the tier bars.</span>
+      </div>
+      <div class="ctl">
+        <label for="tspd">Thief Speed</label>
+        <div class="slider"><input type="range" id="tspd" min="1" max="20" value="10"><span class="val" id="tspd-v">10</span></div>
+        <span class="sub" id="tspd-sub">quick hands: +0</span>
+      </div>
+      <div class="ctl">
+        <label for="vspd">Mark Speed</label>
+        <div class="slider"><input type="range" id="vspd" min="1" max="20" value="10"><span class="val" id="vspd-v">10</span></div>
+        <span class="sub" id="vspd-sub">quick reflexes: +0</span>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head"><span class="sec-num">01</span><h2>Chance of a successful lift</h2></div>
+    <p class="sec-sub">Probability the margin clears 0 — i.e. you get an item at all — for every skill level against every Perception value, under the current scenario.</p>
+    <div class="panel">
+      <figure>
+        <div class="axis-cap">Mark Perception →</div>
+        <div class="heat-scroll"><div id="heat"></div></div>
+        <div class="seq-legend">
+          <span class="lab">0%</span>
+          <span class="bar"><span style="background:var(--seq-0)"></span><span style="background:var(--seq-1)"></span><span style="background:var(--seq-2)"></span><span style="background:var(--seq-3)"></span><span style="background:var(--seq-4)"></span><span style="background:var(--seq-5)"></span><span style="background:var(--seq-6)"></span><span style="background:var(--seq-7)"></span></span>
+          <span class="lab">100%</span>
+        </div>
+        <figcaption id="heat-cap"></figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head"><span class="sec-num">02</span><h2>What kind of success — the outcome tiers</h2></div>
+    <p class="sec-sub">The same detection check, broken into its six graded bands at the selected Perception. Anything green is a completed steal; the darker the green, the less the mark noticed.</p>
+    <div class="panel">
+      <div class="stack-rows" id="stack"></div>
+      <div class="legend" id="stack-legend"></div>
+      <figcaption id="stack-cap" style="margin-top:14px;color:var(--ink-2);font-size:13px;"></figcaption>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head"><span class="sec-num">03</span><h2>The grab check — odds per item</h2></div>
+    <p class="sec-sub">Once a bag is open, each item has its own fine-motor chance: <span style="font-family:var(--mono)">clamp(45 + skill×9 − difficulty, 5, 100)</span>. Keys are fiddly; a key on a hip belt is the hardest thing to lift. Keyrings match loose keys. Rings on a finger use their own tighter roll.</p>
+    <div class="panel">
+      <div class="line-wrap"><svg id="line" width="720" height="360" role="img" aria-label="Grab chance by skill and item type"></svg></div>
+      <div class="legend" id="line-legend"></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head"><span class="sec-num">04</span><h2>Reading the numbers</h2></div>
+    <div class="notes">
+      <div class="note"><h3>Skill is dice, not a bonus</h3><p>Pickpocketing 0–6 sets how many d6 you throw: <span class="mono">skill+1</span>. A novice throws 1d6 (avg 3.5); a Legendary thief throws 7d6 (avg 24.5). Matthios' boon adds one more die.</p></div>
+      <div class="note"><h3>Awareness swings everything</h3><p>An unaware mark counts only <span class="mono">PER×0.35</span>. From behind it's the full <span class="mono">PER</span>. Facing you, it's <span class="mono">PER×1.75</span> — an alert, sharp-eyed guard is nearly impossible to lift from the front.</p></div>
+      <div class="note"><h3>Speed is a quiet ±</h3><p>Each side adds <span class="mono">⌊(SPD−10)/3⌋</span>. Because it floors, being slow hurts a touch more than being fast helps — a fast thief vs a slow mark is worth a few points of margin.</p></div>
+      <div class="note"><h3>Two rolls, not one</h3><p>Detection decides if you're <em>noticed</em>; the grab check decides if your <em>fingers close</em>. You can lift cleanly yet fumble the item, or snatch it while setting off alarm — they're independent.</p></div>
+    </div>
+  </section>
+
+  <details class="tbl">
+    <summary>Data table — success % by skill × Perception (current scenario)</summary>
+    <div class="tbl-scroll"><table class="data" id="dtable"></table></div>
+  </details>
+
+  <footer>
+    Computed live from <code>steal.dm</code> — exact dice convolution, floor rounding, and the same tier cut-offs (<code>−6 / 0 / 5 / 10 / 17</code>). No sampling. Change a dial and every figure re-derives.
+  </footer>
+</div>
+
+<div class="tip" id="tip" role="status" aria-live="polite"></div>
+
+<script>
+(() => {
+  "use strict";
+  const PER_MIN = 4, PER_MAX = 16, SKILLS = [0,1,2,3,4,5,6];
+  const state = { aware:"behind", per:10, tspd:10, vspd:10 };
+
+  const floor = Math.floor;
+  const cache = {};
+  function d6dist(n){
+    if(cache[n]) return cache[n];
+    let dist=[1];
+    for(let i=0;i<n;i++){
+      const nd=new Array(dist.length+6).fill(0);
+      for(let s=0;s<dist.length;s++){ const p=dist[s]; if(!p) continue; for(let f=1;f<=6;f++) nd[s+f]+=p/6; }
+      dist=nd;
+    }
+    return cache[n]=dist;
+  }
+  const speedTerm = s => floor((s-10)/3);
+  function victimScore(per,vspd,mode){
+    if(mode==="unaware") return floor(per*0.35);
+    if(mode==="facing")  return floor(per*1.75)+speedTerm(vspd);
+    return per+speedTerm(vspd);
+  }
+  function tierOf(m){ if(m< -6) return 0; if(m<0) return 1; if(m<5) return 2; if(m<10) return 3; if(m<17) return 4; return 5; }
+  function tiers(skill,per){
+    const dist=d6dist(skill+1), tShift=speedTerm(state.tspd), vS=victimScore(per,state.vspd,state.aware);
+    const t=[0,0,0,0,0,0];
+    for(let s=0;s<dist.length;s++){ const p=dist[s]; if(!p) continue; t[tierOf(s+tShift-vS)]+=p; }
+    return t;
+  }
+  const successProb = (skill,per) => { const t=tiers(skill,per); return t[2]+t[3]+t[4]+t[5]; };
+  const skillName = ["None","Novice","Apprentice","Journeyman","Expert","Master","Legendary"];
+  const TIER = [
+    {name:"Caught",   v:"--t0", ink:"--t0-ink", d:"revealed to bystanders"},
+    {name:"Failed",   v:"--t1", ink:"--t1-ink", d:"mark alarmed, you're unseen"},
+    {name:"Heard",    v:"--t2", ink:"--t2-ink", d:"success · sound + balloon"},
+    {name:"Felt",     v:"--t3", ink:"--t3-ink", d:"success · vague warning"},
+    {name:"Shake",    v:"--t4", ink:"--t4-ink", d:"success · bag twitches"},
+    {name:"Flawless", v:"--t5", ink:"--t5-ink", d:"success · no trace"},
+  ];
+  const cssv = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+
+  // ---------- tooltip ----------
+  const tip = document.getElementById("tip");
+  function showTip(html, x, y){
+    tip.innerHTML = html; tip.style.opacity = "1";
+    const r = tip.getBoundingClientRect();
+    let nx = x+14, ny = y+14;
+    if(nx+r.width > innerWidth-8) nx = x-r.width-14;
+    if(ny+r.height > innerHeight-8) ny = y-r.height-14;
+    tip.style.left = nx+"px"; tip.style.top = ny+"px";
+  }
+  const hideTip = () => tip.style.opacity = "0";
+
+  // ---------- heatmap ----------
+  const SEQ = ["--seq-0","--seq-1","--seq-2","--seq-3","--seq-4","--seq-5","--seq-6","--seq-7"];
+  function seqColor(p){ return cssv(SEQ[Math.min(SEQ.length-1, Math.max(0, Math.round(p*(SEQ.length-1))))]); }
+  function seqInk(p){ return p >= 0.5 ? cssv("--cell-ink-hi") : cssv("--cell-ink-lo"); }
+
+  function renderHeat(){
+    const pers = []; for(let p=PER_MIN;p<=PER_MAX;p++) pers.push(p);
+    let h = '<table class="heat"><thead><tr><th class="corner">skill ↓</th>';
+    for(const p of pers) h += `<th${p===state.per?' class="col-hi"':''}>${p}</th>`;
+    h += '</tr></thead><tbody>';
+    for(let i=SKILLS.length-1;i>=0;i--){
+      const sk=SKILLS[i];
+      h += `<tr><th class="rowh">${sk} · ${skillName[sk]}</th>`;
+      for(const p of pers){
+        const pr=successProb(sk,p);
+        h += `<td class="${p===state.per?'col-hi':''}" data-sk="${sk}" data-per="${p}" style="background:${seqColor(pr)};color:${seqInk(pr)}">${Math.round(pr*100)}</td>`;
+      }
+      h += '</tr>';
+    }
+    h += '</tbody></table>';
+    const host = document.getElementById("heat"); host.innerHTML = h;
+    host.querySelectorAll("td").forEach(td=>{
+      td.addEventListener("mousemove",e=>{
+        const sk=+td.dataset.sk, p=+td.dataset.per, t=tiers(sk,p);
+        const clean=t[4]+t[5];
+        showTip(`<div class="th">${skillName[sk]} vs PER ${p}</div>
+          <div class="rw"><span class="k">Any success</span><span class="v">${(( t[2]+t[3]+t[4]+t[5])*100).toFixed(1)}%</span></div>
+          <div class="rw"><span class="k">Clean (shake+)</span><span class="v">${(clean*100).toFixed(1)}%</span></div>
+          <div class="rw"><span class="k">Caught</span><span class="v">${(t[0]*100).toFixed(1)}%</span></div>`, e.clientX, e.clientY);
+      });
+      td.addEventListener("mouseleave", hideTip);
+    });
+    const at10 = Math.round(successProb(3,state.per)*100);
+    document.getElementById("heat-cap").innerHTML =
+      `Cells show the chance of getting <b>any</b> item. A <b>Journeyman</b> (skill 3) against this mark lands at <b>${at10}%</b>. Hover for the clean-lift and caught odds.`;
+  }
+
+  // ---------- stacked tiers ----------
+  function renderStack(){
+    const host=document.getElementById("stack"); let h="";
+    for(let i=SKILLS.length-1;i>=0;i--){
+      const sk=SKILLS[i], t=tiers(sk,state.per);
+      let segs="";
+      t.forEach((v,ti)=>{
+        if(v<=0) return;
+        const pct=(v*100), lab = pct>=9 ? Math.round(pct)+"%" : "";
+        segs += `<div class="seg tseg" data-sk="${sk}" data-ti="${ti}" data-v="${pct.toFixed(1)}" style="width:${pct}%;background:var(${TIER[ti].v});color:var(${TIER[ti].ink})">${lab}</div>`;
+      });
+      h += `<div class="stack-row"><div class="lbl">${sk}<b>${skillName[sk]}</b></div><div class="bar-track">${segs}</div></div>`;
+    }
+    host.innerHTML=h;
+    host.querySelectorAll(".tseg").forEach(s=>{
+      s.addEventListener("mousemove",e=>{
+        const ti=+s.dataset.ti;
+        showTip(`<div class="th">${skillName[+s.dataset.sk]}</div>
+          <div class="rw"><span class="k"><span class="sw" style="background:var(${TIER[ti].v})"></span>${TIER[ti].name}</span><span class="v">${s.dataset.v}%</span></div>
+          <div style="color:var(--muted);margin-top:4px">${TIER[ti].d}</div>`, e.clientX, e.clientY);
+      });
+      s.addEventListener("mouseleave",hideTip);
+    });
+    // legend
+    document.getElementById("stack-legend").innerHTML = TIER.map(t=>
+      `<span class="item"><span class="sw" style="background:var(${t.v})"></span>${t.name} <span style="color:var(--muted)">— ${t.d}</span></span>`).join("");
+    const mS = tiers(5,state.per), win=(mS[2]+mS[3]+mS[4]+mS[5])*100, clean=(mS[4]+mS[5])*100;
+    document.getElementById("stack-cap").innerHTML =
+      `At PER ${state.per} under this scenario, a <b style="color:var(--ink)">Master</b> succeeds <b style="color:var(--ink)">${win.toFixed(0)}%</b> of the time, <b style="color:var(--ink)">${clean.toFixed(0)}%</b> of it without the mark noticing.`;
+  }
+
+  // ---------- extraction line chart ----------
+  const extract = (skill,diff)=> Math.min(100, Math.max(5, 45 + skill*9 - diff));
+  const ring = skill => Math.min(90, Math.max(3, 8 + skill*7));
+  const LINES = [
+    {name:"Loose item",   c:"--s1", f:sk=>extract(sk,0)},
+    {name:"Key · in bag", c:"--s2", f:sk=>extract(sk,25)},
+    {name:"Key · on belt",c:"--s4", f:sk=>extract(sk,45)},
+    {name:"Ring · worn",  c:"--s3", f:sk=>ring(sk)},
+  ];
+  function renderLine(){
+    const svg=document.getElementById("line");
+    const W=720,H=360, m={t:18,r:120,b:44,l:44};
+    const iw=W-m.l-m.r, ih=H-m.t-m.b;
+    const x=sk=> m.l + (sk/6)*iw;
+    const y=v => m.t + (1 - v/100)*ih;
+    const NS="http://www.w3.org/2000/svg";
+    svg.setAttribute("viewBox",`0 0 ${W} ${H}`);
+    let out="";
+    // gridlines + y labels
+    for(let v=0;v<=100;v+=25){
+      out+=`<line x1="${m.l}" y1="${y(v)}" x2="${m.l+iw}" y2="${y(v)}" stroke="${cssv('--grid')}" stroke-width="1"/>`;
+      out+=`<text x="${m.l-10}" y="${y(v)+4}" text-anchor="end" font-size="11" fill="${cssv('--muted')}" style="font-variant-numeric:tabular-nums">${v}%</text>`;
+    }
+    // x labels
+    for(const sk of SKILLS){
+      out+=`<text x="${x(sk)}" y="${m.t+ih+18}" text-anchor="middle" font-size="11" fill="${cssv('--muted')}">${sk}</text>`;
+    }
+    out+=`<text x="${m.l+iw/2}" y="${H-6}" text-anchor="middle" font-size="11" fill="${cssv('--muted')}" style="letter-spacing:.08em">PICKPOCKETING SKILL</text>`;
+    out+=`<line x1="${m.l}" y1="${m.t}" x2="${m.l}" y2="${m.t+ih}" stroke="${cssv('--axis')}" stroke-width="1"/>`;
+    out+=`<line x1="${m.l}" y1="${m.t+ih}" x2="${m.l+iw}" y2="${m.t+ih}" stroke="${cssv('--axis')}" stroke-width="1"/>`;
+    // lines
+    LINES.forEach(L=>{
+      const col=cssv(L.c);
+      let d="";
+      SKILLS.forEach((sk,i)=>{ d+=(i?"L":"M")+x(sk)+" "+y(L.f(sk)); });
+      out+=`<path d="${d}" fill="none" stroke="${col}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>`;
+      SKILLS.forEach(sk=>{ out+=`<circle cx="${x(sk)}" cy="${y(L.f(sk))}" r="4" fill="${col}" stroke="${cssv('--surface')}" stroke-width="1.5"/>`; });
+      const ly=y(L.f(6));
+      out+=`<text x="${m.l+iw+10}" y="${ly+4}" font-size="12" font-weight="600" fill="${col}">${L.f(6)}%</text>`;
+      out+=`<text x="${m.l+iw+10}" y="${ly+18}" font-size="10.5" fill="${cssv('--muted')}">${L.name}</text>`;
+    });
+    // hover targets
+    SKILLS.forEach(sk=>{
+      out+=`<rect data-sk="${sk}" x="${x(sk)-iw/12}" y="${m.t}" width="${iw/6}" height="${ih}" fill="transparent"/>`;
+    });
+    svg.innerHTML=out;
+    svg.querySelectorAll("rect[data-sk]").forEach(r=>{
+      r.addEventListener("mousemove",e=>{
+        const sk=+r.dataset.sk;
+        const rows=LINES.map(L=>`<div class="rw"><span class="k"><span class="sw" style="background:${cssv(L.c)}"></span>${L.name}</span><span class="v">${L.f(sk)}%</span></div>`).join("");
+        showTip(`<div class="th">${skillName[sk]} — grab odds</div>${rows}`, e.clientX, e.clientY);
+      });
+      r.addEventListener("mouseleave",hideTip);
+    });
+    document.getElementById("line-legend").innerHTML = LINES.map(L=>
+      `<span class="item"><span class="ln" style="border-color:${cssv(L.c)}"></span>${L.name}</span>`).join("")
+      + `<span class="item" style="color:var(--muted)">Keyring — same as a key</span>`;
+  }
+
+  // ---------- data table ----------
+  function renderTable(){
+    const pers=[]; for(let p=PER_MIN;p<=PER_MAX;p++) pers.push(p);
+    let h="<thead><tr><th>Skill</th>"+pers.map(p=>`<th>PER ${p}</th>`).join("")+"</tr></thead><tbody>";
+    for(const sk of SKILLS){
+      h+=`<tr><td>${sk} ${skillName[sk]}</td>`+pers.map(p=>`<td>${Math.round(successProb(sk,p)*100)}%</td>`).join("")+"</tr>";
+    }
+    document.getElementById("dtable").innerHTML=h+"</tbody>";
+  }
+
+  function renderAll(){ renderHeat(); renderStack(); renderLine(); renderTable(); }
+
+  // ---------- controls ----------
+  const awareNotes = {
+    behind:"Stolen from behind — full perception.",
+    facing:"Facing you — perception ×1.75. Brutal.",
+    unaware:"Asleep / blind / downed — perception ×0.35."
+  };
+  document.getElementById("seg-aware").addEventListener("click",e=>{
+    const b=e.target.closest("button"); if(!b) return;
+    state.aware=b.dataset.v;
+    [...e.currentTarget.children].forEach(x=>x.setAttribute("aria-pressed", x===b));
+    document.getElementById("aware-note").textContent=awareNotes[state.aware];
+    renderAll();
+  });
+  function bindSlider(id,key,onchange){
+    const el=document.getElementById(id), out=document.getElementById(id+"-v");
+    el.addEventListener("input",()=>{ state[key]=+el.value; out.textContent=el.value; onchange&&onchange(); renderAll(); });
+  }
+  bindSlider("per","per");
+  bindSlider("tspd","tspd",()=>document.getElementById("tspd-sub").textContent="quick hands: "+fmt(speedTerm(state.tspd)));
+  bindSlider("vspd","vspd",()=>document.getElementById("vspd-sub").textContent="quick reflexes: "+fmt(speedTerm(state.vspd)));
+  const fmt = n => (n>=0?"+":"")+n;
+
+  // re-render on theme change so CSS-var colors refresh
+  new MutationObserver(renderAll).observe(document.documentElement,{attributes:true,attributeFilter:["data-theme"]});
+  matchMedia("(prefers-color-scheme: dark)").addEventListener("change",renderAll);
+
+  renderAll();
+})();
+</script>
