@@ -657,13 +657,12 @@
           aria-labelledby="lbl-aware"
           id="seg-aware"
         >
-          <button data-v="behind" aria-pressed="true">Behind</button>
-          <button data-v="facing" aria-pressed="false">Facing</button>
-          <button data-v="unaware" aria-pressed="false">Unaware</button>
+          <button data-v="behind" aria-pressed="true">Alert</button>
+          <button data-v="unaware" aria-pressed="false">Blind / downed</button>
         </div>
         <div class="slider">
           <span class="sub" id="aware-note"
-            >Stolen from behind — normal perception.</span
+            >Awake and alert — full perception.</span
           >
         </div>
       </div>
@@ -801,10 +800,10 @@
       <div class="note">
         <h3>Awareness swings everything</h3>
         <p>
-          An unaware mark counts only <span class="mono">PER×0.35</span>. From
-          behind it's the full <span class="mono">PER</span>. Facing you, it's
-          <span class="mono">PER×1.75</span> — an alert, sharp-eyed guard is
-          nearly impossible to lift from the front.
+          An alert mark resists with their full <span class="mono">PER</span>.
+          One who is asleep, blind or downed counts only
+          <span class="mono">PER×0.35</span> — worth roughly six points of
+          margin, more than two whole skill levels.
         </p>
       </div>
       <div class="note">
@@ -863,7 +862,6 @@
     const speedTerm = (s) => floor((s - 10) / 3);
     function victimScore(per, vspd, mode) {
       if (mode === "unaware") return floor(per * 0.35);
-      if (mode === "facing") return floor(per * 1.75) + speedTerm(vspd);
       return per + speedTerm(vspd);
     }
     function tierOf(m) {
@@ -1163,8 +1161,7 @@
 
     // ---------- controls ----------
     const awareNotes = {
-      behind: "Stolen from behind — full perception.",
-      facing: "Facing you — perception ×1.75. Brutal.",
+      behind: "Awake and alert — full perception.",
       unaware: "Asleep / blind / downed — perception ×0.35.",
     };
     document.getElementById("seg-aware").addEventListener("click", (e) => {
