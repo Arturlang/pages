@@ -635,7 +635,7 @@
       the odds recompute.
     </p>
     <div class="formula">
-      thief = <b>roll((skill+1)d6)</b> + ⌊(thiefSPD−10)/3⌋ &nbsp;<span
+      thief = <b>roll((skill+1)d6)</b> + ⌊(thiefLCK−10)/3⌋ &nbsp;<span
         class="muted"
         >vs</span
       >&nbsp; mark = PER<span class="muted">·awareness</span> +
@@ -680,7 +680,7 @@
         >
       </div>
       <div class="ctl">
-        <label for="tspd">Thief Speed</label>
+        <label for="tspd">Thief Fortune</label>
         <div class="slider">
           <input type="range" id="tspd" min="1" max="20" value="10" /><span
             class="val"
@@ -688,7 +688,7 @@
             >10</span
           >
         </div>
-        <span class="sub" id="tspd-sub">quick hands: +0</span>
+        <span class="sub" id="tspd-sub">fortune's favor: +0</span>
       </div>
       <div class="ctl">
         <label for="vspd">Mark Speed</label>
@@ -807,11 +807,12 @@
         </p>
       </div>
       <div class="note">
-        <h3>Speed is a quiet ±</h3>
+        <h3>A quiet ± from luck and speed</h3>
         <p>
-          Each side adds <span class="mono">⌊(SPD−10)/3⌋</span>. Because it
-          floors, being slow hurts a touch more than being fast helps — a fast
-          thief vs a slow mark is worth a few points of margin.
+          The thief adds <span class="mono">⌊(fortune−10)/3⌋</span>; the mark
+          adds <span class="mono">⌊(speed−10)/3⌋</span>. Because it floors,
+          being low hurts a touch more than being high helps — a lucky thief vs
+          a slow mark is worth a few points of margin.
         </p>
       </div>
       <div class="note">
@@ -1191,7 +1192,7 @@
       "tspd",
       () =>
         (document.getElementById("tspd-sub").textContent =
-          "quick hands: " + fmt(speedTerm(state.tspd))),
+          "fortune's favor: " + fmt(speedTerm(state.tspd))),
     );
     bindSlider(
       "vspd",
