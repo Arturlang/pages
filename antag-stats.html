@@ -1,0 +1,1153 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Antag Stats</title>
+<style>
+:root {
+	color-scheme: light;
+	--page: #f9f9f7;
+	--surface: #fcfcfb;
+	--surface-2: #f0efec;
+	--ink: #0b0b0b;
+	--ink-2: #52514e;
+	--muted: #898781;
+	--grid: #e1e0d9;
+	--axis: #c3c2b7;
+	--border: rgba(11, 11, 11, 0.10);
+	--series: #2a78d6;
+	--wash: rgba(42, 120, 214, 0.10);
+	--link: #1c5cab;
+}
+@media (prefers-color-scheme: dark) {
+	:root:not([data-theme="light"]) {
+		color-scheme: dark;
+		--page: #0d0d0d;
+		--surface: #1a1a19;
+		--surface-2: #262624;
+		--ink: #ffffff;
+		--ink-2: #c3c2b7;
+		--muted: #898781;
+		--grid: #2c2c2a;
+		--axis: #383835;
+		--border: rgba(255, 255, 255, 0.10);
+		--series: #3987e5;
+		--wash: rgba(57, 135, 229, 0.16);
+		--link: #86b6ef;
+	}
+}
+:root[data-theme="dark"] {
+	color-scheme: dark;
+	--page: #0d0d0d;
+	--surface: #1a1a19;
+	--surface-2: #262624;
+	--ink: #ffffff;
+	--ink-2: #c3c2b7;
+	--muted: #898781;
+	--grid: #2c2c2a;
+	--axis: #383835;
+	--border: rgba(255, 255, 255, 0.10);
+	--series: #3987e5;
+	--wash: rgba(57, 135, 229, 0.16);
+	--link: #86b6ef;
+}
+
+* { box-sizing: border-box; }
+body {
+	margin: 0;
+	background: var(--page);
+	color: var(--ink);
+	font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+main { max-width: 1240px; margin: 0 auto; padding: 24px 16px 64px; }
+h1 { font-size: 22px; margin: 0 0 4px; }
+h2 { font-size: 17px; margin: 40px 0 4px; }
+h3 { font-size: 14px; margin: 0 0 2px; }
+.sub { color: var(--ink-2); margin: 0 0 12px; }
+.note { color: var(--muted); font-size: 12px; margin: 0 0 12px; }
+.empty { color: var(--muted); margin: 8px 0; }
+
+.loader {
+	border: 1px dashed var(--axis);
+	border-radius: 10px;
+	padding: 32px 16px;
+	text-align: center;
+	color: var(--ink-2);
+	background: var(--surface);
+	margin-top: 16px;
+}
+.loader.drag { border-color: var(--series); background: var(--wash); }
+button, select, input {
+	font: inherit;
+	color: var(--ink);
+	background: var(--surface);
+	border: 1px solid var(--axis);
+	border-radius: 6px;
+	padding: 4px 8px;
+}
+button { cursor: pointer; }
+button:hover { background: var(--surface-2); }
+button.on { border-color: var(--series); background: var(--wash); }
+
+.filters {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px 16px;
+	align-items: center;
+	padding: 12px 0;
+	border-bottom: 1px solid var(--grid);
+	margin-bottom: 16px;
+}
+.filters label { display: inline-flex; gap: 6px; align-items: center; color: var(--ink-2); }
+.group { display: inline-flex; gap: 4px; flex-wrap: wrap; }
+
+details.excl { position: relative; }
+details.excl summary { cursor: pointer; color: var(--ink-2); list-style: none; }
+details.excl summary::-webkit-details-marker { display: none; }
+details.excl summary::before { content: "\25B8  "; }
+details.excl[open] summary::before { content: "\25BE  "; }
+.excl-panel {
+	position: absolute;
+	z-index: 5;
+	top: 28px;
+	left: 0;
+	width: min(420px, calc(100vw - 32px));
+	background: var(--surface);
+	border: 1px solid var(--border);
+	border-radius: 10px;
+	box-shadow: 0 6px 24px rgba(0, 0, 0, 0.18);
+	padding: 12px;
+}
+.excl-panel .row { display: flex; gap: 6px; margin-bottom: 8px; flex-wrap: wrap; }
+.excl-panel input[type="search"] { flex: 1; min-width: 120px; }
+.excl-list { max-height: 340px; overflow-y: auto; }
+.excl-list label { display: flex; gap: 8px; align-items: center; padding: 2px 0; color: var(--ink); }
+.excl-list .cnt { margin-left: auto; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; }
+.tile {
+	background: var(--surface);
+	border: 1px solid var(--border);
+	border-radius: 10px;
+	padding: 12px 14px;
+}
+.tile .label { color: var(--ink-2); font-size: 12px; }
+.tile .value { font-size: 26px; font-weight: 600; }
+.tile .hint { color: var(--muted); font-size: 12px; }
+
+.grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 520px), 1fr)); gap: 16px; }
+.card {
+	background: var(--surface);
+	border: 1px solid var(--border);
+	border-radius: 10px;
+	padding: 16px;
+	min-width: 0;
+}
+
+.bar-row {
+	display: grid;
+	grid-template-columns: minmax(0, 170px) minmax(0, 1fr) 64px;
+	gap: 8px;
+	align-items: center;
+	min-height: 24px;
+	padding: 1px 4px;
+	border-radius: 4px;
+}
+.bar-row.clickable { cursor: pointer; }
+.bar-row:hover, .bar-row.sel { background: var(--wash); }
+.bar-row.sel .bl { font-weight: 600; }
+.bl { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink); }
+.bt { height: 16px; }
+.bf { display: block; height: 100%; min-width: 2px; background: var(--series); border-radius: 0 4px 4px 0; }
+.bv { text-align: right; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+
+.hist { display: flex; align-items: flex-end; height: 200px; border-bottom: 1px solid var(--axis); gap: 2px; }
+.hist .slot { flex: 1; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; }
+.hist .cv { color: var(--ink-2); font-size: 12px; font-variant-numeric: tabular-nums; }
+.hist .cb { width: 24px; max-width: 80%; background: var(--series); border-radius: 4px 4px 0 0; min-height: 2px; }
+.hist-x { display: flex; gap: 2px; }
+.hist-x span { flex: 1; text-align: center; color: var(--muted); font-size: 12px; padding-top: 4px; }
+
+svg text { fill: var(--muted); font-size: 11px; font-family: inherit; }
+svg .gl { stroke: var(--grid); stroke-width: 1; }
+svg .ax { stroke: var(--axis); stroke-width: 1; }
+svg .ref { stroke: var(--axis); stroke-width: 1; }
+svg .ln { fill: none; stroke: var(--series); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+svg .area { fill: var(--wash); stroke: none; }
+svg .dot { fill: var(--series); stroke: var(--surface); stroke-width: 2; }
+svg .cross { stroke: var(--ink-2); stroke-width: 1; }
+svg .ann { fill: var(--ink-2); font-size: 12px; }
+
+.heat-wrap { overflow-x: auto; }
+.heat { display: grid; gap: 2px; min-width: 560px; }
+.heat .hh { height: 130px; display: flex; align-items: flex-end; justify-content: center; }
+.heat .hh span {
+	writing-mode: vertical-rl;
+	transform: rotate(180deg);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	max-height: 128px;
+	color: var(--ink-2);
+	font-size: 12px;
+}
+.heat .hl { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; align-self: center; cursor: pointer; padding-right: 6px; }
+.heat .hl:hover { color: var(--link); }
+.heat .hc { height: 22px; border-radius: 3px; }
+.heat-legend { display: flex; align-items: center; gap: 8px; margin-top: 10px; color: var(--muted); font-size: 12px; flex-wrap: wrap; }
+.heat-legend .ramp { width: 160px; height: 10px; border-radius: 3px; }
+.heat-legend .swatch { width: 14px; height: 10px; border-radius: 3px; background: var(--surface-2); display: inline-block; }
+
+.drill-head { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 8px; }
+.drill-head input, .drill-head select { min-width: 200px; max-width: 100%; }
+.facts { display: flex; flex-wrap: wrap; gap: 4px 16px; color: var(--ink-2); margin: 4px 0 12px; }
+.facts b { color: var(--ink); font-weight: 600; }
+.chars { color: var(--ink-2); font-size: 13px; margin-top: 12px; }
+
+.tbl-wrap { overflow-x: auto; max-height: 560px; overflow-y: auto; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; font-size: 13px; }
+th, td { padding: 6px 10px; text-align: left; white-space: nowrap; border-bottom: 1px solid var(--grid); }
+th { position: sticky; top: 0; background: var(--surface); color: var(--ink-2); font-weight: 600; cursor: pointer; user-select: none; }
+th.num, td.num { text-align: right; font-variant-numeric: tabular-nums; }
+th.sorted::after { content: " \25BE"; }
+th.sorted.asc::after { content: " \25B4"; }
+tbody tr:hover { background: var(--wash); }
+td a { color: var(--link); cursor: pointer; text-decoration: none; }
+td a:hover { text-decoration: underline; }
+.tbl-tools { display: flex; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; align-items: center; }
+
+#tip {
+	position: fixed;
+	z-index: 20;
+	pointer-events: none;
+	background: var(--surface);
+	color: var(--ink);
+	border: 1px solid var(--border);
+	border-radius: 8px;
+	box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+	padding: 8px 10px;
+	font-size: 12px;
+	max-width: 320px;
+	display: none;
+}
+#tip b { display: block; margin-bottom: 2px; font-size: 13px; }
+#tip div { color: var(--ink-2); }
+#app[hidden] { display: none; }
+</style>
+</head>
+<body>
+<main>
+	<h1>Antag stats</h1>
+	<p class="sub" id="source">Load the antags.json export from the feedback query.</p>
+
+	<div class="loader" id="loader">
+		<p>Drop <b>antags.json</b> here, plus <b>manifest.json</b> for the population comparison, or</p>
+		<input type="file" id="file" accept=".json,application/json" multiple>
+	</div>
+
+	<div id="app" hidden>
+		<div class="filters">
+			<label>From <input type="date" id="from"></label>
+			<label>To <input type="date" id="to"></label>
+			<span class="group" id="presets">
+				<button data-days="0">All</button>
+				<button data-days="30">Last 30 days</button>
+				<button data-days="90">Last 90 days</button>
+				<button data-days="180">Last 180 days</button>
+			</span>
+			<label>Top <select id="topn"><option>10</option><option selected>25</option><option>50</option><option>100</option></select></label>
+			<label title="Count a player once per round per antag, even if they held that antag datum several times"><input type="checkbox" id="dedupe" checked> Once per round per antag</label>
+			<details class="excl" id="excl">
+				<summary id="excl-sum">Excluded antags: none</summary>
+				<div class="excl-panel">
+					<div class="row">
+						<input type="search" id="excl-search" placeholder="Search antags">
+						<button id="excl-none">Include all</button>
+						<button id="excl-all">Exclude all</button>
+					</div>
+					<div class="excl-list" id="excl-list"></div>
+				</div>
+			</details>
+			<button id="reload">Load files</button>
+		</div>
+
+		<div class="tiles" id="tiles"></div>
+
+		<h2>How often each player gets antag</h2>
+		<p class="sub">Click a player to open them in the player breakdown below.</p>
+		<div class="grid2">
+			<div class="card">
+				<h3>Most antag entries per player</h3>
+				<p class="note" id="top-players-note"></p>
+				<div id="top-players"></div>
+			</div>
+			<div>
+				<div class="card">
+					<h3>Players by number of antag entries</h3>
+					<p class="note">How many players fall into each bucket</p>
+					<div class="hist" id="hist"></div>
+					<div class="hist-x" id="hist-x"></div>
+				</div>
+				<div class="card" style="margin-top:16px">
+					<h3>How concentrated antag play is</h3>
+					<p class="note">Share of all antag entries held by the most frequent players. The diagonal is a perfectly even spread.</p>
+					<div id="lorenz"></div>
+				</div>
+			</div>
+		</div>
+
+		<h2>Antags per round</h2>
+		<p class="sub">Different players holding an antag role in a round. Rounds with no antags at round end are not in the export.</p>
+		<div class="grid2">
+			<div class="card">
+				<h3>Rounds by number of antags</h3>
+				<p class="note" id="round-hist-note"></p>
+				<div class="hist" id="round-hist"></div>
+				<div class="hist-x" id="round-hist-x"></div>
+			</div>
+			<div class="card">
+				<h3>Antags per round over time</h3>
+				<p class="note">Average over the surrounding <select id="roll"><option>10</option><option selected>25</option><option>50</option><option>100</option></select> rounds</p>
+				<div id="round-trend"></div>
+			</div>
+		</div>
+
+		<h2>Antag players vs the whole population</h2>
+		<div id="pop-missing" class="card"><p class="empty" style="margin:0">Load <b>manifest.json</b> (the per-round player list from the manifest table) to compare antag players against everyone who played.</p></div>
+		<div id="pop" hidden>
+			<p class="sub" id="pop-sub"></p>
+			<p class="note"><label><input type="checkbox" id="pop-only" checked> Only rounds that appear in the antag export (skips rounds that never reached round end)</label></p>
+			<div class="tiles" id="pop-tiles"></div>
+			<div class="grid2" style="margin-top:16px">
+				<div class="card">
+					<h3>Players who ever got antag, by rounds played</h3>
+					<p class="note">Share of each group with at least one antag round</p>
+					<div class="hist" id="pop-ever"></div>
+					<div class="hist-x" id="pop-ever-x"></div>
+				</div>
+				<div class="card">
+					<h3>Players by antag rate</h3>
+					<p class="note">Rounds as antag &divide; rounds played, for players with at least <select id="min-rounds"><option>5</option><option selected>10</option><option>25</option><option>50</option></select> rounds</p>
+					<div class="hist" id="pop-rate"></div>
+					<div class="hist-x" id="pop-rate-x"></div>
+				</div>
+				<div class="card">
+					<h3>Share of each round's players who are antag</h3>
+					<p class="note">Averaged over the surrounding rounds, using the window set under Antags per round</p>
+					<div id="pop-trend"></div>
+				</div>
+				<div class="card">
+					<h3>Highest antag rate</h3>
+					<p class="note" id="pop-top-note"></p>
+					<div id="pop-top"></div>
+				</div>
+			</div>
+
+			<h3 style="margin-top:24px">Players who never got antag</h3>
+			<p class="note">Never held an antag role at round end in the selected dates, with the current antag exclusions applied</p>
+			<div class="tiles" id="never-tiles"></div>
+			<div class="grid2" style="margin-top:16px">
+				<div class="card">
+					<h3>Share of each round's players who never got antag</h3>
+					<p class="note">Averaged over the surrounding rounds, using the window set under Antags per round</p>
+					<div id="never-trend"></div>
+				</div>
+				<div class="card">
+					<h3>Most rounds played without ever getting antag</h3>
+					<p class="note" id="never-top-note"></p>
+					<div id="never-top"></div>
+				</div>
+			</div>
+		</div>
+
+		<h2>Who plays which antags</h2>
+		<p class="sub">Click an antag to open it in the antag breakdown below.</p>
+		<div class="grid2">
+			<div class="card">
+				<h3>Different players per antag</h3>
+				<p class="note">Antags with the widest variety of players</p>
+				<div id="antag-variety"></div>
+			</div>
+			<div class="card">
+				<h3>Antags dominated by one player</h3>
+				<p class="note">Share of the antag's entries held by its single most frequent player, among antags with at least <select id="min-entries"><option>10</option><option selected>20</option><option>50</option><option>100</option></select> entries</p>
+				<div id="antag-conc"></div>
+			</div>
+		</div>
+
+		<div class="card" style="margin-top:16px">
+			<div class="drill-head">
+				<h3 style="margin-right:auto">Top players &times; top antags</h3>
+				<span class="group" id="heat-mode">
+					<button data-mode="count" class="on">Entries</button>
+					<button data-mode="share">Share of player's antags</button>
+				</span>
+			</div>
+			<p class="note">Rows are the most frequent players, columns the most common antags. Hover a cell for numbers.</p>
+			<div class="heat-wrap"><div class="heat" id="heat"></div></div>
+			<div class="heat-legend" id="heat-legend"></div>
+		</div>
+
+		<h2>Breakdowns</h2>
+		<div class="grid2">
+			<div class="card">
+				<div class="drill-head">
+					<h3>Player</h3>
+					<input id="pl-input" list="pl-list" placeholder="Type a ckey" autocomplete="off">
+					<datalist id="pl-list"></datalist>
+				</div>
+				<div class="facts" id="pl-facts"></div>
+				<div id="pl-bars"></div>
+				<div class="chars" id="pl-chars"></div>
+			</div>
+			<div class="card">
+				<div class="drill-head">
+					<h3>Antag</h3>
+					<select id="an-select"></select>
+				</div>
+				<div class="facts" id="an-facts"></div>
+				<div id="an-bars"></div>
+			</div>
+		</div>
+
+		<h2>Antag table</h2>
+		<div class="tbl-wrap" id="antag-table"></div>
+
+		<h2>Player table</h2>
+		<div class="tbl-tools"><input type="search" id="pl-search" placeholder="Filter by ckey or character"></div>
+		<div class="tbl-wrap" id="player-table"></div>
+	</div>
+</main>
+<div id="tip"></div>
+
+<script>
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const fmtN = n => Math.round(n).toLocaleString();
+const pct = x => (x * 100 >= 10 || x === 0 ? (x * 100).toFixed(0) : (x * 100).toFixed(1)) + "%";
+const ckeyOf = k => String(k ?? "").toLowerCase().replace(/[^a-z0-9]/g, "");
+
+const RAMP = ["#cde2fb", "#b7d3f6", "#9ec5f4", "#86b6ef", "#6da7ec", "#5598e7", "#3987e5", "#2a78d6", "#256abf", "#1c5cab", "#184f95", "#104281", "#0d366b"];
+const darkQuery = matchMedia("(prefers-color-scheme: dark)");
+const isDark = () => {
+	const t = document.documentElement.dataset.theme;
+	return t ? t === "dark" : darkQuery.matches;
+};
+const ramp = () => isDark() ? RAMP.slice(3).reverse() : RAMP;
+
+let RAW = [], POP = [], antagFile = "", popFile = "";
+let D = null, P = null;
+const excluded = new Set();
+const state = { from: "", to: "", dedupe: true, topN: 25, minEntries: 20, minRounds: 10, popOnlyExported: true, roll: 25, heatMode: "count", player: null, antag: null, playerSearch: "" };
+const sorts = { antag: { key: "n", dir: -1 }, player: { key: "n", dir: -1 } };
+
+try {
+	for (const a of JSON.parse(localStorage.getItem("antagStats.excluded") || "[]")) excluded.add(a);
+} catch (e) {}
+const saveExcluded = () => {
+	try { localStorage.setItem("antagStats.excluded", JSON.stringify([...excluded])); } catch (e) {}
+};
+
+const TIPS = new Map();
+let tipSeq = 0;
+const tip = lines => { const id = ++tipSeq; TIPS.set(id, lines); return id; };
+const tipEl = $("#tip");
+function showTip(lines, x, y) {
+	if (!lines) return hideTip();
+	tipEl.innerHTML = `<b>${esc(lines[0])}</b>` + lines.slice(1).map(l => `<div>${esc(l)}</div>`).join("");
+	tipEl.style.display = "block";
+	const w = tipEl.offsetWidth, h = tipEl.offsetHeight;
+	let left = x + 14, top = y + 14;
+	if (left + w > innerWidth - 8) left = Math.max(8, x - w - 14);
+	if (top + h > innerHeight - 8) top = Math.max(8, y - h - 14);
+	tipEl.style.left = left + "px";
+	tipEl.style.top = top + "px";
+}
+function hideTip() { tipEl.style.display = "none"; }
+function onPointer(e) {
+	const t = e.target.closest && e.target.closest("[data-tip]");
+	if (!t) return hideTip();
+	showTip(TIPS.get(+t.dataset.tip), e.clientX, e.clientY);
+}
+document.addEventListener("pointermove", onPointer);
+document.addEventListener("pointerdown", onPointer);
+document.addEventListener("scroll", hideTip, true);
+
+function load(json, name) {
+	const rows = Array.isArray(json) ? json : (json.rows || json.data || []);
+	const first = rows[0] || {};
+	if (!("antag_name" in first || "antagonist_name" in first || "antag_type" in first)) {
+		POP = rows.map(r => ({ round: r.round_id, dt: String(r.datetime || r.timestamp || ""), ckey: r.ckey || ckeyOf(r.byond_key || r.key) })).filter(r => r.ckey && r.round != null);
+		popFile = name;
+		updateSource();
+		if (RAW.length) renderAll();
+		return;
+	}
+	antagFile = name;
+	RAW = rows.map(r => ({
+		round: r.round_id,
+		dt: String(r.datetime || ""),
+		ckey: r.ckey || ckeyOf(r.byond_key || r.key),
+		name: r.character_name || r.name || "",
+		antag: r.antag_name || r.antagonist_name || r.antag_type || "Unknown",
+	})).filter(r => r.ckey);
+	const dates = RAW.map(r => r.dt).filter(Boolean).sort();
+	state.minDate = (dates[0] || "").slice(0, 10);
+	state.maxDate = (dates[dates.length - 1] || "").slice(0, 10);
+	state.from = state.minDate;
+	state.to = state.maxDate;
+	$("#from").value = state.from;
+	$("#to").value = state.to;
+	state.exportRounds = new Set(RAW.map(r => r.round));
+	state.minRound = Math.min(...state.exportRounds);
+	state.maxRound = Math.max(...state.exportRounds);
+	updateSource();
+	$("#loader").hidden = true;
+	$("#app").hidden = false;
+	buildExclusionList();
+	markPreset(0);
+	renderAll();
+}
+
+function updateSource() {
+	let s = RAW.length ? `${antagFile}: ${fmtN(RAW.length)} antag entries from ${state.minDate} to ${state.maxDate}` : "Waiting for antags.json";
+	if (POP.length) s += ` · ${popFile}: ${fmtN(POP.length)} player-rounds`;
+	$("#source").textContent = s;
+}
+
+function readFile(file) {
+	file.text().then(t => load(JSON.parse(t), file.name)).catch(err => alert("Could not read that file as JSON: " + err.message));
+}
+$("#file").addEventListener("change", e => { for (const f of e.target.files) readFile(f); });
+const loader = $("#loader");
+document.addEventListener("dragover", e => { e.preventDefault(); loader.classList.add("drag"); });
+document.addEventListener("dragleave", e => { if (!e.relatedTarget) loader.classList.remove("drag"); });
+document.addEventListener("drop", e => {
+	e.preventDefault();
+	loader.classList.remove("drag");
+	for (const f of e.dataTransfer.files) readFile(f);
+});
+$("#reload").addEventListener("click", () => { $("#file").value = ""; $("#file").click(); });
+
+function compute() {
+	const seen = new Set();
+	const rows = [];
+	for (const r of RAW) {
+		const day = r.dt.slice(0, 10);
+		if (state.from && day < state.from) continue;
+		if (state.to && day > state.to) continue;
+		if (excluded.has(r.antag)) continue;
+		if (state.dedupe) {
+			const k = r.round + "|" + r.ckey + "|" + r.antag;
+			if (seen.has(k)) continue;
+			seen.add(k);
+		}
+		rows.push(r);
+	}
+	const players = new Map(), antags = new Map(), rounds = new Set(), roundMap = new Map();
+	for (const r of rows) {
+		rounds.add(r.round);
+		let rd = roundMap.get(r.round);
+		if (!rd) roundMap.set(r.round, rd = { round: r.round, dt: r.dt, players: new Set(), n: 0 });
+		rd.players.add(r.ckey);
+		rd.n++;
+		let p = players.get(r.ckey);
+		if (!p) players.set(r.ckey, p = { ckey: r.ckey, n: 0, rounds: new Set(), antags: new Map(), chars: new Map(), first: r.dt, last: r.dt });
+		p.n++;
+		p.rounds.add(r.round);
+		p.antags.set(r.antag, (p.antags.get(r.antag) || 0) + 1);
+		if (r.name) p.chars.set(r.name, (p.chars.get(r.name) || 0) + 1);
+		if (r.dt < p.first) p.first = r.dt;
+		if (r.dt > p.last) p.last = r.dt;
+		let a = antags.get(r.antag);
+		if (!a) antags.set(r.antag, a = { name: r.antag, n: 0, players: new Map(), rounds: new Set() });
+		a.n++;
+		a.players.set(r.ckey, (a.players.get(r.ckey) || 0) + 1);
+		a.rounds.add(r.round);
+	}
+	for (const p of players.values()) {
+		p.antagList = [...p.antags].sort((x, y) => y[1] - x[1]);
+		p.fav = p.antagList[0];
+		p.favShare = p.fav[1] / p.n;
+	}
+	for (const a of antags.values()) {
+		a.playerList = [...a.players].sort((x, y) => y[1] - x[1]);
+		a.top = a.playerList[0];
+		a.topShare = a.top[1] / a.n;
+		a.top5Share = a.playerList.slice(0, 5).reduce((s, x) => s + x[1], 0) / a.n;
+		a.perPlayer = a.n / a.players.size;
+	}
+	const playersByN = [...players.values()].sort((x, y) => y.n - x.n || x.ckey.localeCompare(y.ckey));
+	const antagsByN = [...antags.values()].sort((x, y) => y.n - x.n || x.name.localeCompare(y.name));
+	const roundList = [...roundMap.values()].sort((x, y) => x.dt.localeCompare(y.dt) || x.round - y.round);
+	return { rows, players, antags, rounds, playersByN, antagsByN, roundList };
+}
+
+function barList(el, items, o) {
+	if (!items.length) { el.innerHTML = `<p class="empty">No data in this range.</p>`; return; }
+	const max = o.max || Math.max(...items.map(o.value)) || 1;
+	el.innerHTML = items.map(it => {
+		const v = o.value(it);
+		const sel = o.selected && o.selected(it) ? " sel" : "";
+		const key = o.onClick ? ` data-key="${esc(o.key(it))}"` : "";
+		return `<div class="bar-row${sel}${o.onClick ? " clickable" : ""}" data-tip="${tip(o.tip(it))}"${key}>`
+			+ `<span class="bl">${esc(o.label(it))}</span>`
+			+ `<span class="bt"><span class="bf" style="width:${(v / max * 100).toFixed(2)}%"></span></span>`
+			+ `<span class="bv">${esc(o.fmt ? o.fmt(v) : fmtN(v))}</span></div>`;
+	}).join("");
+	el.onclick = o.onClick ? e => {
+		const r = e.target.closest("[data-key]");
+		if (r) o.onClick(r.dataset.key);
+	} : null;
+}
+
+function renderTiles() {
+	const P = D.playersByN.length, total = D.rows.length;
+	const counts = D.playersByN.map(p => p.n);
+	const perRound = D.roundList.map(r => r.players.size).sort((a, b) => a - b);
+	const top10 = Math.max(1, Math.round(P * 0.1));
+	const top10Share = total ? counts.slice(0, top10).reduce((a, b) => a + b, 0) / total : 0;
+	const tiles = [
+		["Antag entries", fmtN(total), `${fmtN(D.antags.size)} different antags`],
+		["Players", fmtN(P), "distinct ckeys with any antag"],
+		["Rounds", fmtN(D.rounds.size), `median ${median(perRound)} antags per round`],
+		["Median entries per player", String(median([...counts].reverse())), P ? `mean ${(total / P).toFixed(1)}` : ""],
+		["Top 10% of players", pct(top10Share), `of all entries (${fmtN(top10)} players)`],
+	];
+	$("#tiles").innerHTML = tiles.map(([l, v, h]) => `<div class="tile"><div class="label">${esc(l)}</div><div class="value">${esc(v)}</div><div class="hint">${esc(h)}</div></div>`).join("");
+}
+
+function renderTopPlayers() {
+	const items = D.playersByN.slice(0, state.topN);
+	$("#top-players-note").textContent = `Top ${items.length} of ${fmtN(D.playersByN.length)} players`;
+	barList($("#top-players"), items, {
+		label: p => p.ckey,
+		value: p => p.n,
+		key: p => p.ckey,
+		selected: p => p.ckey === state.player,
+		tip: p => [p.ckey, `${fmtN(p.n)} antag entries in ${fmtN(p.rounds.size)} rounds`, `${p.antags.size} different antags`, `Most played: ${p.fav[0]} (${pct(p.favShare)})`],
+		onClick: k => selectPlayer(k, true),
+	});
+}
+
+function columns(el, xel, cols) {
+	const max = Math.max(...cols.map(c => c.value)) || 1;
+	el.innerHTML = cols.map(c => `<div class="slot" data-tip="${tip(c.tip)}">`
+		+ `<span class="cv">${esc(c.fmt ?? fmtN(c.value))}</span><span class="cb" style="height:${(c.value / max * 170).toFixed(1)}px"></span></div>`).join("");
+	xel.innerHTML = cols.map(c => `<span>${esc(c.label)}</span>`).join("");
+}
+
+const BUCKETS = [[1, 1, "1"], [2, 2, "2"], [3, 5, "3–5"], [6, 10, "6–10"], [11, 25, "11–25"], [26, 50, "26–50"], [51, 100, "51–100"], [101, Infinity, "101+"]];
+function renderHist() {
+	const P = D.playersByN.length, total = D.rows.length;
+	columns($("#hist"), $("#hist-x"), BUCKETS.map(([lo, hi, label]) => {
+		const ps = D.playersByN.filter(p => p.n >= lo && p.n <= hi);
+		const entries = ps.reduce((s, p) => s + p.n, 0);
+		return { label, value: ps.length, tip: [`${label} antag entries`, `${fmtN(ps.length)} players (${P ? pct(ps.length / P) : "0%"} of players)`, `${fmtN(entries)} entries (${total ? pct(entries / total) : "0%"} of all entries)`] };
+	}));
+}
+
+const ROUND_BUCKETS = [[1, 1, "1"], [2, 2, "2"], [3, 3, "3"], [4, 4, "4"], [5, 5, "5"], [6, 8, "6–8"], [9, 12, "9–12"], [13, 20, "13–20"], [21, Infinity, "21+"]];
+function renderRoundHist() {
+	const counts = D.roundList.map(r => r.players.size).sort((a, b) => a - b);
+	const R = counts.length;
+	$("#round-hist-note").textContent = R ? `${fmtN(R)} rounds, median ${median(counts)} antags, mean ${(counts.reduce((a, b) => a + b, 0) / R).toFixed(1)}` : "";
+	columns($("#round-hist"), $("#round-hist-x"), ROUND_BUCKETS.map(([lo, hi, label]) => {
+		const n = counts.filter(c => c >= lo && c <= hi).length;
+		return { label, value: n, tip: [`${label} antag${hi === 1 ? "" : "s"} in the round`, `${fmtN(n)} rounds (${R ? pct(n / R) : "0%"})`] };
+	}));
+}
+const median = sorted => {
+	const n = sorted.length;
+	return n ? (n % 2 ? sorted[(n - 1) / 2] : (sorted[n / 2 - 1] + sorted[n / 2]) / 2) : 0;
+};
+
+function niceStep(max) {
+	const raw = max / 4, mag = 10 ** Math.floor(Math.log10(raw)), f = raw / mag;
+	return (f <= 1 ? 1 : f <= 2 ? 2 : f <= 5 ? 5 : 10) * mag;
+}
+
+function trendChart(el, items, values, o) {
+	const R = items.length;
+	if (R < 2) { el.innerHTML = `<p class="empty">Not enough rounds in this range.</p>`; return; }
+	const half = Math.floor(state.roll / 2);
+	const pre = [0];
+	for (const v of values) pre.push(pre[pre.length - 1] + v);
+	const avg = values.map((_, i) => {
+		const lo = Math.max(0, i - half), hi = Math.min(R, i + half + 1);
+		return (pre[hi] - pre[lo]) / (hi - lo);
+	});
+	const W = Math.max(280, el.clientWidth), H = 230, L = 40, R_ = 14, T = 10, B = 34;
+	const iw = W - L - R_, ih = H - T - B;
+	const peak = (Math.max(...avg) || 1) * 1.15, yStep = niceStep(peak), nTicks = Math.ceil(peak / yStep), yMax = nTicks * yStep;
+	const X = i => L + i / (R - 1) * iw, Y = v => T + (1 - v / yMax) * ih;
+	const step = Math.max(1, Math.floor(R / 500));
+	let line = "";
+	for (let i = 0; i < R; i += step) line += `${line ? "L" : "M"}${X(i).toFixed(1)},${Y(avg[i]).toFixed(1)}`;
+	line += `L${X(R - 1).toFixed(1)},${Y(avg[R - 1]).toFixed(1)}`;
+	let g = "";
+	for (let k = 1; k <= nTicks; k++) {
+		const v = k * yStep;
+		g += `<line class="gl" x1="${L}" x2="${W - R_}" y1="${Y(v)}" y2="${Y(v)}"/>`;
+		g += `<text x="${L - 6}" y="${Y(v) + 4}" text-anchor="end">${esc(o.fmt(v))}</text>`;
+	}
+	g += `<text x="${L - 6}" y="${Y(0) + 4}" text-anchor="end">${esc(o.fmt(0))}</text>`;
+	const ticks = 4;
+	for (let k = 0; k <= ticks; k++) {
+		const i = Math.round(k / ticks * (R - 1));
+		g += `<text x="${X(i)}" y="${H - B + 16}" text-anchor="${k === 0 ? "start" : k === ticks ? "end" : "middle"}">${esc(items[i].dt.slice(0, 10))}</text>`;
+	}
+	g += `<text x="${L + iw / 2}" y="${H - 4}" text-anchor="middle">Rounds in time order</text>`;
+	const id = tip(null);
+	el.innerHTML = `<svg width="${W}" height="${H}" data-tip="${id}" style="display:block;touch-action:none">`
+		+ g
+		+ `<line class="ax" x1="${L}" x2="${W - R_}" y1="${Y(0)}" y2="${Y(0)}"/>`
+		+ `<path class="ln" d="${line}"/>`
+		+ `<circle class="dot" cx="${X(R - 1)}" cy="${Y(avg[R - 1])}" r="4"/>`
+		+ `<text class="ann" x="${W - R_}" y="${T + 2}" text-anchor="end" dominant-baseline="hanging">Latest: ${esc(o.fmt(avg[R - 1]))}</text>`
+		+ `<line class="cross" y1="${T}" y2="${Y(0)}" visibility="hidden"/>`
+		+ `<circle class="dot hover" r="4" visibility="hidden"/>`
+		+ `</svg>`;
+	const svg = el.firstChild, cross = svg.querySelector(".cross"), dot = svg.querySelector(".hover");
+	svg.addEventListener("pointermove", e => {
+		const rect = svg.getBoundingClientRect();
+		const i = Math.round(Math.min(1, Math.max(0, (e.clientX - rect.left - L) / iw)) * (R - 1));
+		cross.setAttribute("x1", X(i)); cross.setAttribute("x2", X(i)); cross.setAttribute("visibility", "visible");
+		dot.setAttribute("cx", X(i)); dot.setAttribute("cy", Y(avg[i])); dot.setAttribute("visibility", "visible");
+		TIPS.set(id, o.tip(items[i], values[i], avg[i]));
+	});
+	svg.addEventListener("pointerleave", () => { cross.setAttribute("visibility", "hidden"); dot.setAttribute("visibility", "hidden"); TIPS.set(id, null); });
+}
+
+function renderRoundTrend() {
+	trendChart($("#round-trend"), D.roundList, D.roundList.map(r => r.players.size), {
+		fmt: v => String(+v.toFixed(1)),
+		tip: (r, v, a) => [`Round ${r.round}`, r.dt, `${v} antag${v === 1 ? "" : "s"} this round (${r.n} entries)`, `${a.toFixed(1)} on average around it`],
+	});
+}
+
+function computePop() {
+	if (!POP.length) return null;
+	const antagRounds = new Map(D.roundList.map(r => [r.round, r.players.size]));
+	const rounds = new Map(), players = new Map();
+	const add = (ckey, round, dt) => {
+		let r = rounds.get(round);
+		if (!r) rounds.set(round, r = { round, dt, players: new Set() });
+		if (dt && (!r.dt || dt < r.dt)) r.dt = dt;
+		r.players.add(ckey);
+		let p = players.get(ckey);
+		if (!p) players.set(ckey, p = { ckey, rounds: new Set() });
+		p.rounds.add(round);
+	};
+	for (const m of POP) {
+		if (m.round < state.minRound || m.round > state.maxRound) continue;
+		if (state.popOnlyExported && !state.exportRounds.has(m.round)) continue;
+		const day = m.dt.slice(0, 10);
+		if (state.from && day < state.from) continue;
+		if (state.to && day > state.to) continue;
+		add(m.ckey, m.round, m.dt);
+	}
+	for (const r of D.rows) add(r.ckey, r.round, r.dt);
+	for (const p of players.values()) {
+		const a = D.players.get(p.ckey);
+		p.played = p.rounds.size;
+		p.antagRounds = a ? a.rounds.size : 0;
+		p.rate = p.antagRounds / p.played;
+	}
+	for (const r of rounds.values()) r.antags = antagRounds.get(r.round) || 0;
+	const roundList = [...rounds.values()].sort((x, y) => x.dt.localeCompare(y.dt) || x.round - y.round);
+	return { players, roundList };
+}
+
+const EVER_BUCKETS = [[1, 1, "1"], [2, 5, "2–5"], [6, 20, "6–20"], [21, 50, "21–50"], [51, 100, "51–100"], [101, Infinity, "101+"]];
+const RATE_BUCKETS = [["0%", r => r === 0], ["<5%", r => r > 0 && r < 0.05], ["5–10%", r => r >= 0.05 && r < 0.1], ["10–20%", r => r >= 0.1 && r < 0.2], ["20–30%", r => r >= 0.2 && r < 0.3], ["30–50%", r => r >= 0.3 && r < 0.5], ["50%+", r => r >= 0.5]];
+function renderPop() {
+	$("#pop").hidden = !P;
+	$("#pop-missing").hidden = !!P;
+	if (!P) return;
+	const ps = [...P.players.values()];
+	const N = ps.length, antagN = ps.filter(p => p.antagRounds).length;
+	const played = ps.reduce((s, p) => s + p.played, 0), asAntag = ps.reduce((s, p) => s + p.antagRounds, 0);
+	const overall = played ? asAntag / played : 0;
+	const sizes = P.roundList.map(r => r.players.size).sort((a, b) => a - b);
+	const shares = P.roundList.map(r => r.antags / r.players.size).sort((a, b) => a - b);
+	$("#pop-sub").textContent = `${fmtN(N)} players across ${fmtN(P.roundList.length)} rounds. A player counts as in a round if they spawned in the manifest or held an antag role in it.`;
+	$("#pop-tiles").innerHTML = [
+		["Players", fmtN(N), "spawned or held an antag role"],
+		["Ever got antag", N ? pct(antagN / N) : "0%", `${fmtN(antagN)} players; ${fmtN(N - antagN)} never did`],
+		["Rounds played as antag", pct(overall), `of ${fmtN(played)} player-rounds`],
+		["Median round population", String(median(sizes)), `median ${pct(median(shares))} of them antag`],
+	].map(([l, v, h]) => `<div class="tile"><div class="label">${esc(l)}</div><div class="value">${esc(v)}</div><div class="hint">${esc(h)}</div></div>`).join("");
+
+	columns($("#pop-ever"), $("#pop-ever-x"), EVER_BUCKETS.map(([lo, hi, label]) => {
+		const g = ps.filter(p => p.played >= lo && p.played <= hi);
+		const a = g.filter(p => p.antagRounds).length;
+		const share = g.length ? a / g.length : 0;
+		const gPlayed = g.reduce((s, p) => s + p.played, 0), gAntag = g.reduce((s, p) => s + p.antagRounds, 0);
+		return { label, value: share, fmt: pct(share), tip: [`${label} round${hi === 1 ? "" : "s"} played`, `${fmtN(g.length)} players`, `${fmtN(a)} got antag at least once (${pct(share)})`, `Antag in ${gPlayed ? pct(gAntag / gPlayed) : "0%"} of their rounds`] };
+	}));
+
+	const eligible = ps.filter(p => p.played >= state.minRounds);
+	const E = eligible.length;
+	columns($("#pop-rate"), $("#pop-rate-x"), RATE_BUCKETS.map(([label, test]) => {
+		const n = eligible.filter(p => test(p.rate)).length;
+		return { label, value: n, tip: [`${label} antag rate`, `${fmtN(n)} players (${E ? pct(n / E) : "0%"} of the ${fmtN(E)} with ${state.minRounds}+ rounds)`] };
+	}));
+
+	renderPopTrend();
+	renderNever(ps, played);
+
+	const top =[...eligible].sort((x, y) => y.rate - x.rate || y.played - x.played).slice(0, state.topN);
+	$("#pop-top-note").textContent = `Players with at least ${state.minRounds} rounds played. The population average is ${pct(overall)}.`;
+	barList($("#pop-top"), top, {
+		label: p => p.ckey, value: p => p.rate, max: 1, fmt: pct, key: p => p.ckey,
+		selected: p => p.ckey === state.player,
+		tip: p => [p.ckey, `Antag in ${fmtN(p.antagRounds)} of ${fmtN(p.played)} rounds played (${pct(p.rate)})`, `Population average: ${pct(overall)}`],
+		onClick: k => selectPlayer(k, true),
+	});
+}
+function renderNever(ps, played) {
+	const never = ps.filter(p => !p.antagRounds);
+	const N = ps.length, nN = never.length;
+	const neverPlayed = never.reduce((s, p) => s + p.played, 0);
+	const regulars = ps.filter(p => p.played >= state.minRounds);
+	const neverRegulars = regulars.filter(p => !p.antagRounds).length;
+	$("#never-tiles").innerHTML = [
+		["Never got antag", fmtN(nN), `${N ? pct(nN / N) : "0%"} of all players`],
+		["Their share of rounds played", played ? pct(neverPlayed / played) : "0%", `${fmtN(neverPlayed)} of ${fmtN(played)} player-rounds`],
+		[`Regulars (${state.minRounds}+ rounds) never antag`, fmtN(neverRegulars), `${regulars.length ? pct(neverRegulars / regulars.length) : "0%"} of ${fmtN(regulars.length)} regulars`],
+		["Median rounds played", String(median(never.map(p => p.played).sort((a, b) => a - b))), `vs ${median(ps.filter(p => p.antagRounds).map(p => p.played).sort((a, b) => a - b))} for players who did get antag`],
+	].map(([l, v, h]) => `<div class="tile"><div class="label">${esc(l)}</div><div class="value">${esc(v)}</div><div class="hint">${esc(h)}</div></div>`).join("");
+	renderNeverTrend();
+	const top = [...never].sort((x, y) => y.played - x.played || x.ckey.localeCompare(y.ckey)).slice(0, state.topN);
+	$("#never-top-note").textContent = nN ? `Top ${top.length} of ${fmtN(nN)} never-antag players` : "";
+	barList($("#never-top"), top, {
+		label: p => p.ckey, value: p => p.played,
+		tip: p => [p.ckey, `${fmtN(p.played)} rounds played, never antag`],
+	});
+}
+function renderNeverTrend() {
+	const never = new Set([...P.players.values()].filter(p => !p.antagRounds).map(p => p.ckey));
+	trendChart($("#never-trend"), P.roundList, P.roundList.map(r => { let n = 0; for (const c of r.players) if (never.has(c)) n++; return n / r.players.size; }), {
+		fmt: v => `${+(v * 100).toFixed(1)}%`,
+		tip: (r, v, a) => [`Round ${r.round}`, r.dt, `${pct(v)} of ${r.players.size} players never got antag`, `${pct(a)} on average around it`],
+	});
+}
+function renderPopTrend() {
+	trendChart($("#pop-trend"), P.roundList, P.roundList.map(r => r.antags / r.players.size), {
+		fmt: v => `${+(v * 100).toFixed(1)}%`,
+		tip: (r, v, a) => [`Round ${r.round}`, r.dt, `${r.antags} of ${r.players.size} players antag (${pct(v)})`, `${pct(a)} on average around it`],
+	});
+}
+
+function renderLorenz() {
+	const el = $("#lorenz");
+	const counts = D.playersByN.map(p => p.n);
+	const P = counts.length, total = counts.reduce((a, b) => a + b, 0);
+	if (!P) { el.innerHTML = `<p class="empty">No data in this range.</p>`; return; }
+	const cum = [0];
+	for (const c of counts) cum.push(cum[cum.length - 1] + c);
+	const W = Math.max(280, el.clientWidth), H = 230, L = 40, R = 14, T = 10, B = 34;
+	const iw = W - L - R, ih = H - T - B;
+	const X = f => L + f * iw, Y = f => T + (1 - f) * ih;
+	const step = Math.max(1, Math.floor(P / 400));
+	const idx = [];
+	for (let i = 0; i <= P; i += step) idx.push(i);
+	if (idx[idx.length - 1] !== P) idx.push(P);
+	const line = idx.map((i, k) => `${k ? "L" : "M"}${X(i / P).toFixed(1)},${Y(cum[i] / total).toFixed(1)}`).join("");
+	const area = line + `L${X(1)},${Y(0)}L${X(0)},${Y(0)}Z`;
+	let g = "";
+	for (const f of [0.25, 0.5, 0.75, 1]) {
+		g += `<line class="gl" x1="${L}" x2="${W - R}" y1="${Y(f)}" y2="${Y(f)}"/>`;
+		g += `<text x="${L - 6}" y="${Y(f) + 4}" text-anchor="end">${f * 100}%</text>`;
+	}
+	for (const f of [0, 0.25, 0.5, 0.75, 1]) g += `<text x="${X(f)}" y="${H - B + 16}" text-anchor="${f === 0 ? "start" : f === 1 ? "end" : "middle"}">${f * 100}%</text>`;
+	g += `<text x="${L + iw / 2}" y="${H - 4}" text-anchor="middle">Share of players, most frequent first</text>`;
+	const i10 = Math.max(1, Math.round(P * 0.1)), y10 = cum[i10] / total;
+	const annRight = X(i10 / P) + 10 + 190 < W;
+	const id = tip(null);
+	el.innerHTML = `<svg width="${W}" height="${H}" data-tip="${id}" style="display:block;touch-action:none">`
+		+ g
+		+ `<line class="ax" x1="${L}" x2="${W - R}" y1="${Y(0)}" y2="${Y(0)}"/>`
+		+ `<line class="ref" x1="${X(0)}" y1="${Y(0)}" x2="${X(1)}" y2="${Y(1)}"/>`
+		+ `<path class="area" d="${area}"/><path class="ln" d="${line}"/>`
+		+ `<circle class="dot" cx="${X(i10 / P)}" cy="${Y(y10)}" r="4"/>`
+		+ `<text class="ann" x="${X(i10 / P) + (annRight ? 10 : -10)}" y="${Y(y10) + 16}" text-anchor="${annRight ? "start" : "end"}">Top 10% of players: ${pct(y10)} of entries</text>`
+		+ `<line class="cross" id="lz-x" y1="${T}" y2="${Y(0)}" visibility="hidden"/>`
+		+ `<circle class="dot" id="lz-dot" r="4" visibility="hidden"/>`
+		+ `</svg>`;
+	const svg = el.firstChild, cross = svg.querySelector("#lz-x"), dot = svg.querySelector("#lz-dot");
+	svg.addEventListener("pointermove", e => {
+		const rect = svg.getBoundingClientRect();
+		const fx = Math.min(1, Math.max(0, (e.clientX - rect.left - L) / iw));
+		const i = Math.max(1, Math.round(fx * P));
+		const x = X(i / P), y = Y(cum[i] / total);
+		cross.setAttribute("x1", x); cross.setAttribute("x2", x); cross.setAttribute("visibility", "visible");
+		dot.setAttribute("cx", x); dot.setAttribute("cy", y); dot.setAttribute("visibility", "visible");
+		TIPS.set(id, [`Top ${pct(i / P)} of players (${fmtN(i)})`, `${pct(cum[i] / total)} of all antag entries`, `The ${ordinal(i)} player has ${fmtN(counts[i - 1])} entries`]);
+	});
+	svg.addEventListener("pointerleave", () => { cross.setAttribute("visibility", "hidden"); dot.setAttribute("visibility", "hidden"); TIPS.set(id, null); });
+}
+const ordinal = n => n + (n % 100 >= 11 && n % 100 <= 13 ? "th" : ({ 1: "st", 2: "nd", 3: "rd" }[n % 10] || "th"));
+
+function antagTip(a) {
+	return [a.name, `${fmtN(a.players.size)} different players`, `${fmtN(a.n)} entries in ${fmtN(a.rounds.size)} rounds`, `${a.perPlayer.toFixed(1)} entries per player`, `Top player: ${a.top[0]} (${fmtN(a.top[1])}, ${pct(a.topShare)})`, `Top 5 players: ${pct(a.top5Share)} of entries`];
+}
+
+function renderAntagCharts() {
+	const variety = [...D.antagsByN].sort((x, y) => y.players.size - x.players.size || y.n - x.n).slice(0, state.topN);
+	barList($("#antag-variety"), variety, {
+		label: a => a.name, value: a => a.players.size, key: a => a.name,
+		selected: a => a.name === state.antag, tip: antagTip, onClick: k => selectAntag(k, true),
+	});
+	const conc = D.antagsByN.filter(a => a.n >= state.minEntries).sort((x, y) => y.topShare - x.topShare || y.n - x.n).slice(0, state.topN);
+	barList($("#antag-conc"), conc, {
+		label: a => a.name, value: a => a.topShare, max: 1, fmt: pct, key: a => a.name,
+		selected: a => a.name === state.antag, tip: antagTip, onClick: k => selectAntag(k, true),
+	});
+}
+
+function renderHeat() {
+	const ps = D.playersByN.slice(0, Math.min(state.topN, 40));
+	const as = D.antagsByN.slice(0, 14);
+	const el = $("#heat");
+	if (!ps.length || !as.length) { el.innerHTML = `<p class="empty">No data in this range.</p>`; $("#heat-legend").innerHTML = ""; return; }
+	const share = state.heatMode === "share";
+	const val = (p, a) => { const c = p.antags.get(a.name) || 0; return share ? c / p.n : c; };
+	let max = 0;
+	for (const p of ps) for (const a of as) max = Math.max(max, val(p, a));
+	const r = ramp();
+	const color = v => {
+		if (!v) return "var(--surface-2)";
+		const t = share ? v / max : Math.log1p(v) / Math.log1p(max);
+		return r[Math.min(r.length - 1, Math.round(t * (r.length - 1)))];
+	};
+	el.style.gridTemplateColumns = `minmax(90px, 150px) repeat(${as.length}, minmax(26px, 1fr))`;
+	let h = `<div></div>` + as.map(a => `<div class="hh" title="${esc(a.name)}"><span>${esc(a.name)}</span></div>`).join("");
+	for (const p of ps) {
+		h += `<div class="hl" data-key="${esc(p.ckey)}" title="${esc(p.ckey)}">${esc(p.ckey)}</div>`;
+		for (const a of as) {
+			const c = p.antags.get(a.name) || 0;
+			h += `<div class="hc" style="background:${color(val(p, a))}" data-tip="${tip([`${p.ckey} as ${a.name}`, `${fmtN(c)} entries`, `${pct(c / p.n)} of this player's antag entries`, `${pct(c / a.n)} of all ${a.name} entries`])}"></div>`;
+		}
+	}
+	el.innerHTML = h;
+	el.onclick = e => { const k = e.target.closest("[data-key]"); if (k) selectPlayer(k.dataset.key, true); };
+	const maxLabel = share ? pct(max) : fmtN(max);
+	$("#heat-legend").innerHTML = `<span class="swatch"></span> none <span style="margin-left:12px">${share ? "1%" : "1"}</span>`
+		+ `<span class="ramp" style="background:linear-gradient(to right, ${r.join(",")})"></span><span>${maxLabel}</span>`
+		+ (share ? "" : `<span>(log scale)</span>`);
+}
+
+function selectPlayer(ckey, scroll) {
+	state.player = ckey;
+	$("#pl-input").value = ckey;
+	renderTopPlayers();
+	renderPlayer();
+	if (scroll) $("#pl-input").closest(".card").scrollIntoView({ behavior: "smooth", block: "nearest" });
+}
+function selectAntag(name, scroll) {
+	state.antag = name;
+	$("#an-select").value = name;
+	renderAntagCharts();
+	renderAntag();
+	if (scroll) $("#an-select").closest(".card").scrollIntoView({ behavior: "smooth", block: "nearest" });
+}
+
+function renderPlayer() {
+	const p = D.players.get(state.player);
+	if (!p) { $("#pl-facts").innerHTML = ""; $("#pl-bars").innerHTML = `<p class="empty">Pick a player.</p>`; $("#pl-chars").innerHTML = ""; return; }
+	const rank = D.playersByN.indexOf(p) + 1;
+	$("#pl-facts").innerHTML = [
+		["Entries", fmtN(p.n)], ["Rounds", fmtN(p.rounds.size)], ["Different antags", p.antags.size],
+		["Rank", `${ordinal(rank)} of ${fmtN(D.playersByN.length)}`], ["First", p.first.slice(0, 10)], ["Last", p.last.slice(0, 10)],
+	].map(([k, v]) => `<span>${esc(k)} <b>${esc(v)}</b></span>`).join("");
+	barList($("#pl-bars"), p.antagList.slice(0, 30), {
+		label: x => x[0], value: x => x[1], key: x => x[0],
+		tip: x => { const a = D.antags.get(x[0]); return [x[0], `${fmtN(x[1])} entries (${pct(x[1] / p.n)} of this player's)`, `${pct(x[1] / a.n)} of all ${x[0]} entries`]; },
+		onClick: k => selectAntag(k, false),
+	});
+	const chars = [...p.chars].sort((x, y) => y[1] - x[1]);
+	$("#pl-chars").innerHTML = chars.length ? `<b>Characters (${chars.length}):</b> ` + chars.slice(0, 12).map(([n, c]) => `${esc(n)} &times;${c}`).join(", ") + (chars.length > 12 ? ", …" : "") : "";
+}
+
+function renderAntag() {
+	const a = D.antags.get(state.antag);
+	if (!a) { $("#an-facts").innerHTML = ""; $("#an-bars").innerHTML = `<p class="empty">Pick an antag.</p>`; return; }
+	$("#an-facts").innerHTML = [
+		["Entries", fmtN(a.n)], ["Players", fmtN(a.players.size)], ["Rounds", fmtN(a.rounds.size)],
+		["Per player", a.perPlayer.toFixed(1)], ["Top player share", pct(a.topShare)], ["Top 5 share", pct(a.top5Share)],
+	].map(([k, v]) => `<span>${esc(k)} <b>${esc(v)}</b></span>`).join("");
+	barList($("#an-bars"), a.playerList.slice(0, state.topN), {
+		label: x => x[0], value: x => x[1], key: x => x[0],
+		tip: x => { const p = D.players.get(x[0]); return [`${x[0]} as ${a.name}`, `${fmtN(x[1])} entries (${pct(x[1] / a.n)} of this antag's)`, `${pct(x[1] / p.n)} of this player's antag entries`]; },
+		onClick: k => selectPlayer(k, false),
+	});
+}
+
+function table(el, cols, rows, sortKey) {
+	const s = sorts[sortKey];
+	const col = cols.find(c => c.key === s.key) || cols[0];
+	const sorted = [...rows].sort((x, y) => {
+		const a = col.get(x), b = col.get(y);
+		return (typeof a === "string" ? a.localeCompare(b) : a - b) * s.dir;
+	});
+	el.innerHTML = `<table><thead><tr>${cols.map(c => `<th data-k="${c.key}" class="${c.num ? "num" : ""}${c.key === s.key ? " sorted" + (s.dir > 0 ? " asc" : "") : ""}">${esc(c.label)}</th>`).join("")}</tr></thead>`
+		+ `<tbody>${sorted.map(r => `<tr>${cols.map(c => `<td class="${c.num ? "num" : ""}">${c.html ? c.html(r) : esc(c.fmt ? c.fmt(r) : c.get(r))}</td>`).join("")}</tr>`).join("")}</tbody></table>`;
+	el.onclick = e => {
+		const th = e.target.closest("th");
+		if (th) {
+			const k = th.dataset.k;
+			if (s.key === k) s.dir = -s.dir; else { s.key = k; s.dir = cols.find(c => c.key === k).num ? -1 : 1; }
+			table(el, cols, rows, sortKey);
+			return;
+		}
+		const a = e.target.closest("a[data-player]");
+		if (a) selectPlayer(a.dataset.player, true);
+		const b = e.target.closest("a[data-antag]");
+		if (b) selectAntag(b.dataset.antag, true);
+	};
+}
+
+function renderAntagTable() {
+	table($("#antag-table"), [
+		{ key: "name", label: "Antag", get: a => a.name, html: a => `<a data-antag="${esc(a.name)}">${esc(a.name)}</a>` },
+		{ key: "n", label: "Entries", num: true, get: a => a.n, fmt: a => fmtN(a.n) },
+		{ key: "players", label: "Players", num: true, get: a => a.players.size, fmt: a => fmtN(a.players.size) },
+		{ key: "rounds", label: "Rounds", num: true, get: a => a.rounds.size, fmt: a => fmtN(a.rounds.size) },
+		{ key: "perRound", label: "Per round when present", num: true, get: a => a.n / a.rounds.size, fmt: a => (a.n / a.rounds.size).toFixed(1) },
+		{ key: "per", label: "Entries per player", num: true, get: a => a.perPlayer, fmt: a => a.perPlayer.toFixed(1) },
+		{ key: "top", label: "Top player", get: a => a.top[0], html: a => `<a data-player="${esc(a.top[0])}">${esc(a.top[0])}</a> (${fmtN(a.top[1])})` },
+		{ key: "topShare", label: "Top player share", num: true, get: a => a.topShare, fmt: a => pct(a.topShare) },
+		{ key: "top5", label: "Top 5 share", num: true, get: a => a.top5Share, fmt: a => pct(a.top5Share) },
+	], D.antagsByN, "antag");
+}
+
+function renderPlayerTable() {
+	const q = state.playerSearch.trim().toLowerCase();
+	let all = D.playersByN;
+	if (P) all = all.concat([...P.players.values()].filter(p => !D.players.has(p.ckey)).map(p => ({ ckey: p.ckey, n: 0, rounds: new Set(), antags: new Map(), chars: new Map(), fav: null, favShare: 0, first: "", last: "" })));
+	const rows = q ? all.filter(p => p.ckey.includes(q) || [...p.chars.keys()].some(n => n.toLowerCase().includes(q))) : all;
+	const pop = p => P && P.players.get(p.ckey);
+	table($("#player-table"), [
+		{ key: "ckey", label: "Ckey", get: p => p.ckey, html: p => `<a data-player="${esc(p.ckey)}">${esc(p.ckey)}</a>` },
+		{ key: "n", label: "Entries", num: true, get: p => p.n, fmt: p => fmtN(p.n) },
+		{ key: "rounds", label: P ? "Antag rounds" : "Rounds", num: true, get: p => p.rounds.size, fmt: p => fmtN(p.rounds.size) },
+		...(P ? [
+			{ key: "played", label: "Rounds played", num: true, get: p => pop(p)?.played ?? 0, fmt: p => fmtN(pop(p)?.played ?? 0) },
+			{ key: "rate", label: "Antag rate", num: true, get: p => pop(p)?.rate ?? 0, fmt: p => pct(pop(p)?.rate ?? 0) },
+		] : []),
+		{ key: "distinct", label: "Different antags", num: true, get: p => p.antags.size },
+		{ key: "fav", label: "Most played", get: p => p.fav ? p.fav[0] : "", html: p => p.fav ? `<a data-antag="${esc(p.fav[0])}">${esc(p.fav[0])}</a> (${pct(p.favShare)})` : "&mdash;" },
+		{ key: "chars", label: "Characters", num: true, get: p => p.chars.size },
+		{ key: "first", label: "First seen", get: p => p.first, fmt: p => p.first.slice(0, 10) },
+		{ key: "last", label: "Last seen", get: p => p.last, fmt: p => p.last.slice(0, 10) },
+	], rows, "player");
+}
+
+function buildExclusionList() {
+	const counts = new Map();
+	for (const r of RAW) counts.set(r.antag, (counts.get(r.antag) || 0) + 1);
+	const list = [...counts].sort((a, b) => b[1] - a[1]);
+	$("#excl-list").innerHTML = list.map(([n, c]) => `<label data-name="${esc(n.toLowerCase())}"><input type="checkbox" value="${esc(n)}"${excluded.has(n) ? "" : " checked"}> ${esc(n)} <span class="cnt">${fmtN(c)}</span></label>`).join("");
+	updateExclSummary();
+}
+function updateExclSummary() {
+	$("#excl-sum").textContent = `Excluded antags: ${excluded.size ? excluded.size : "none"}`;
+}
+$("#excl-list").addEventListener("change", e => {
+	const n = e.target.value;
+	if (e.target.checked) excluded.delete(n); else excluded.add(n);
+	saveExcluded(); updateExclSummary(); renderAll();
+});
+$("#excl-search").addEventListener("input", e => {
+	const q = e.target.value.trim().toLowerCase();
+	for (const l of $("#excl-list").children) l.hidden = q && !l.dataset.name.includes(q);
+});
+function setAllExcluded(on) {
+	for (const cb of $("#excl-list").querySelectorAll("input")) {
+		if (cb.closest("label").hidden) continue;
+		cb.checked = !on;
+		if (on) excluded.add(cb.value); else excluded.delete(cb.value);
+	}
+	saveExcluded(); updateExclSummary(); renderAll();
+}
+$("#excl-none").addEventListener("click", () => setAllExcluded(false));
+$("#excl-all").addEventListener("click", () => setAllExcluded(true));
+document.addEventListener("click", e => { const d = $("#excl"); if (d.open && !d.contains(e.target)) d.open = false; });
+
+function markPreset(days) {
+	for (const b of $("#presets").children) b.classList.toggle("on", +b.dataset.days === days);
+}
+$("#presets").addEventListener("click", e => {
+	const b = e.target.closest("button");
+	if (!b) return;
+	const days = +b.dataset.days;
+	state.to = state.maxDate;
+	if (days) {
+		const d = new Date(state.maxDate + "T00:00:00Z");
+		d.setUTCDate(d.getUTCDate() - days + 1);
+		state.from = d.toISOString().slice(0, 10);
+	} else state.from = state.minDate;
+	$("#from").value = state.from;
+	$("#to").value = state.to;
+	markPreset(days);
+	renderAll();
+});
+$("#from").addEventListener("change", e => { state.from = e.target.value; markPreset(-1); renderAll(); });
+$("#to").addEventListener("change", e => { state.to = e.target.value; markPreset(-1); renderAll(); });
+$("#topn").addEventListener("change", e => { state.topN = +e.target.value; renderAll(); });
+$("#min-entries").addEventListener("change", e => { state.minEntries = +e.target.value; renderAntagCharts(); });
+$("#roll").addEventListener("change", e => { state.roll = +e.target.value; renderRoundTrend(); if (P) { renderPopTrend(); renderNeverTrend(); } });
+$("#min-rounds").addEventListener("change", e => { state.minRounds = +e.target.value; renderPop(); });
+$("#pop-only").addEventListener("change", e => { state.popOnlyExported = e.target.checked; renderAll(); });
+$("#dedupe").addEventListener("change", e => { state.dedupe = e.target.checked; renderAll(); });
+$("#heat-mode").addEventListener("click", e => {
+	const b = e.target.closest("button");
+	if (!b) return;
+	state.heatMode = b.dataset.mode;
+	for (const x of $("#heat-mode").children) x.classList.toggle("on", x === b);
+	renderHeat();
+});
+$("#pl-input").addEventListener("change", e => {
+	const k = ckeyOf(e.target.value);
+	if (D.players.has(k)) selectPlayer(k, false);
+});
+$("#an-select").addEventListener("change", e => selectAntag(e.target.value, false));
+$("#pl-search").addEventListener("input", e => { state.playerSearch = e.target.value; renderPlayerTable(); });
+darkQuery.addEventListener("change", () => D && renderHeat());
+let resizeTimer;
+addEventListener("resize", () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(() => { if (D) { renderLorenz(); renderRoundTrend(); if (P) { renderPopTrend(); renderNeverTrend(); } } }, 150); });
+
+function renderAll() {
+	TIPS.clear();
+	hideTip();
+	D = compute();
+	P = computePop();
+	if (!D.players.has(state.player)) state.player = D.playersByN[0]?.ckey ?? null;
+	if (!D.antags.has(state.antag)) state.antag = D.antagsByN[0]?.name ?? null;
+	$("#pl-list").innerHTML = D.playersByN.map(p => `<option value="${esc(p.ckey)}">`).join("");
+	$("#an-select").innerHTML = D.antagsByN.map(a => `<option value="${esc(a.name)}">${esc(a.name)} (${fmtN(a.n)})</option>`).join("");
+	$("#an-select").value = state.antag ?? "";
+	$("#pl-input").value = state.player ?? "";
+	renderTiles();
+	renderTopPlayers();
+	renderHist();
+	renderLorenz();
+	renderRoundHist();
+	renderRoundTrend();
+	renderPop();
+	renderAntagCharts();
+	renderHeat();
+	renderPlayer();
+	renderAntag();
+	renderAntagTable();
+	renderPlayerTable();
+}
+
+if (window.ANTAG_DATA) load(window.ANTAG_DATA, "embedded data");
+if (window.MANIFEST_DATA) load(window.MANIFEST_DATA, "embedded manifest");
+</script>
+</body>
+</html>
