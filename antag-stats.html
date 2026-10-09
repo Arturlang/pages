@@ -124,6 +124,7 @@ details.excl[open] summary::before { content: "\25BE  "; }
 .excl-list { max-height: 340px; overflow-y: auto; }
 .excl-list label { display: flex; gap: 8px; align-items: center; padding: 2px 0; color: var(--ink); }
 .excl-list .cnt { margin-left: auto; color: var(--muted); font-variant-numeric: tabular-nums; }
+.pref-tag { font-size: 11px; color: var(--ink-2); border: 1px solid var(--axis); border-radius: 4px; padding: 0 4px; }
 
 .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; }
 .tile {
@@ -263,9 +264,11 @@ td a:hover { text-decoration: underline; }
 				<div class="excl-panel">
 					<div class="row">
 						<input type="search" id="excl-search" placeholder="Search antags">
+						<button id="excl-pref">Only antags with prefs</button>
 						<button id="excl-none">Include all</button>
 						<button id="excl-all">Exclude all</button>
 					</div>
+					<p class="note">Antags marked <span class="pref-tag">pref</span> have a toggle in the antag preferences menu on master. Others (ghost roles, ERT, converts, mind control) are excluded by default.</p>
 					<div class="excl-list" id="excl-list"></div>
 				</div>
 			</details>
@@ -442,11 +445,23 @@ const excluded = new Set();
 const state = { from: "", to: "", dedupe: true, topN: 25, minEntries: 20, minRounds: 10, popOnlyExported: true, roll: 25, heatMode: "count", player: null, antag: null, playerSearch: "" };
 const sorts = { antag: { key: "n", dir: -1 }, player: { key: "n", dir: -1 } };
 
+// Antag datum roots (subtypes included) that a preference toggle covers on master: each dynamic ruleset's
+// preview_antag_datum when the ruleset has a pref_flag/jobban_flag, plus GLOB.non_ruleset_antagonists
+const PREF_TYPES = ["/datum/antagonist/abductor", "/datum/antagonist/assault_operative", "/datum/antagonist/bitrunning_glitch", "/datum/antagonist/blob", "/datum/antagonist/blood_worm", "/datum/antagonist/bloodsucker", "/datum/antagonist/brother", "/datum/antagonist/changeling", "/datum/antagonist/cortical_borer", "/datum/antagonist/cult", "/datum/antagonist/fugitive", "/datum/antagonist/heretic", "/datum/antagonist/infected_ipc", "/datum/antagonist/malf_ai", "/datum/antagonist/nightmare", "/datum/antagonist/ninja", "/datum/antagonist/nukeop", "/datum/antagonist/obsessed", "/datum/antagonist/opfor_candidate", "/datum/antagonist/paradox_clone", "/datum/antagonist/rev/head", "/datum/antagonist/revenant", "/datum/antagonist/sentient_creature", "/datum/antagonist/space_dragon", "/datum/antagonist/spy", "/datum/antagonist/traitor", "/datum/antagonist/voidwalker", "/datum/antagonist/wire_priest", "/datum/antagonist/wizard", "/datum/antagonist/xeno"];
+const hasPref = type => PREF_TYPES.some(p => type === p || type.startsWith(p + "/"));
+const prefNames = new Set();
+
+const EXCL_KEY = "antagStats.excluded.v2";
+let savedExclusions = false;
 try {
-	for (const a of JSON.parse(localStorage.getItem("antagStats.excluded") || "[]")) excluded.add(a);
+	const saved = localStorage.getItem(EXCL_KEY);
+	if (saved !== null) {
+		savedExclusions = true;
+		for (const a of JSON.parse(saved)) excluded.add(a);
+	}
 } catch (e) {}
 const saveExcluded = () => {
-	try { localStorage.setItem("antagStats.excluded", JSON.stringify([...excluded])); } catch (e) {}
+	try { localStorage.setItem(EXCL_KEY, JSON.stringify([...excluded])); } catch (e) {}
 };
 
 const TIPS = new Map();
@@ -491,6 +506,7 @@ function load(json, name) {
 		ckey: r.ckey || ckeyOf(r.byond_key || r.key),
 		name: r.character_name || r.name || "",
 		antag: r.antag_name || r.antagonist_name || r.antag_type || "Unknown",
+		type: r.antag_type || r.antagonist_type || "",
 	})).filter(r => r.ckey);
 	const dates = RAW.map(r => r.dt).filter(Boolean).sort();
 	state.minDate = (dates[0] || "").slice(0, 10);
@@ -1048,11 +1064,25 @@ function renderPlayerTable() {
 
 function buildExclusionList() {
 	const counts = new Map();
-	for (const r of RAW) counts.set(r.antag, (counts.get(r.antag) || 0) + 1);
+	prefNames.clear();
+	for (const r of RAW) {
+		counts.set(r.antag, (counts.get(r.antag) || 0) + 1);
+		if (hasPref(r.type)) prefNames.add(r.antag);
+	}
+	if (!savedExclusions) setPrefDefault(counts.keys());
 	const list = [...counts].sort((a, b) => b[1] - a[1]);
-	$("#excl-list").innerHTML = list.map(([n, c]) => `<label data-name="${esc(n.toLowerCase())}"><input type="checkbox" value="${esc(n)}"${excluded.has(n) ? "" : " checked"}> ${esc(n)} <span class="cnt">${fmtN(c)}</span></label>`).join("");
+	$("#excl-list").innerHTML = list.map(([n, c]) => `<label data-name="${esc(n.toLowerCase())}"><input type="checkbox" value="${esc(n)}"${excluded.has(n) ? "" : " checked"}> ${esc(n)}${prefNames.has(n) ? ` <span class="pref-tag">pref</span>` : ""} <span class="cnt">${fmtN(c)}</span></label>`).join("");
 	updateExclSummary();
 }
+function setPrefDefault(names) {
+	excluded.clear();
+	for (const n of names) if (!prefNames.has(n)) excluded.add(n);
+}
+$("#excl-pref").addEventListener("click", () => {
+	setPrefDefault(new Set(RAW.map(r => r.antag)));
+	for (const cb of $("#excl-list").querySelectorAll("input")) cb.checked = !excluded.has(cb.value);
+	saveExcluded(); updateExclSummary(); renderAll();
+});
 function updateExclSummary() {
 	$("#excl-sum").textContent = `Excluded antags: ${excluded.size ? excluded.size : "none"}`;
 }
